@@ -96,11 +96,6 @@ const AuditLogPage = lazy(() =>
     default: module.AuditLogPage,
   })),
 );
-const SystemPage = lazy(() =>
-  import("./pages/EnterprisePages").then((module) => ({
-    default: module.SystemPage,
-  })),
-);
 
 function RequireRole({
   role,
@@ -285,14 +280,6 @@ function App() {
             element={
               <RequirePermission permission="audit.view">
                 <AuditLogPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/system"
-            element={
-              <RequirePermission permission="system.view">
-                <SystemPage />
               </RequirePermission>
             }
           />

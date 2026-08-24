@@ -289,7 +289,6 @@ const permissionModules = [
   ["payroll", "Payroll"],
   ["report", "Reports"],
   ["audit", "Audit"],
-  ["system", "System"],
 ] as const;
 
 const permissionActions = ["view", "create", "update", "delete", "approve"] as const;
@@ -439,7 +438,6 @@ export const menus: MenuItem[] = [
   ["reports", "Báo cáo", "chart", "/hr/reports", "report.view"],
   ["users", "Tài khoản", "shield", "/admin/users", "user.view"],
   ["audit", "Audit log", "history", "/admin/audit", "audit.view"],
-  ["system", "Hệ thống", "settings", "/admin/system", "system.view"],
 ].map(([code, name, icon, route, permission], index) => ({
   id: `menu-${code}`,
   menuCode: code,

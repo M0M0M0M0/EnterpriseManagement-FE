@@ -135,12 +135,6 @@ const hrNav: NavItem[] = [
     icon: <ShieldRegular />,
     permission: "audit.view",
   },
-  {
-    to: "/admin/system",
-    label: "Hệ thống",
-    icon: <SettingsRegular />,
-    permission: "system.view",
-  },
 ];
 
 const employeeNav: NavItem[] = [
@@ -174,7 +168,6 @@ const pageTitles: Record<string, string> = {
   "/hr/reports": "Báo cáo",
   "/admin/users": "Tài khoản",
   "/admin/audit": "Audit log",
-  "/admin/system": "Hệ thống",
   "/employee/home": "Trang chủ",
   "/employee/attendance": "Chấm công",
   "/employee/schedule": "Lịch ca",

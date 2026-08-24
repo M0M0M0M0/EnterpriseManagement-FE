@@ -31,7 +31,6 @@ import {
   SectionPanel,
 } from "../components/ui";
 import { useNotify } from "../components/useNotify";
-import { mockApi } from "../services/mockApi";
 import { useAppStore } from "../store/useAppStore";
 import type {
   Customer,
@@ -633,54 +632,6 @@ export function AuditLogPage() {
             item.ipAddress,
           ])}
         />
-      </SectionPanel>
-    </div>
-  );
-}
-
-export function SystemPage() {
-  const resetDemo = useAppStore((state) => state.resetDemo);
-  const notify = useNotify();
-  const [health, setHealth] = useState({
-    status: "unknown",
-    mode: "mock",
-    checkedAt: "",
-  });
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="Hệ thống"
-        description="Cấu hình demo, kiểm tra API health và reset dữ liệu mock."
-      />
-      <MetricRail
-        items={[
-          { label: "API mode", value: health.mode },
-          {
-            label: "Trạng thái",
-            value: health.status,
-            tone: health.status === "healthy" ? "success" : "warning",
-          },
-          { label: "Kiểm tra lúc", value: health.checkedAt ? formatDate(health.checkedAt) : "--" },
-        ]}
-      />
-      <SectionPanel title="Công cụ hệ thống">
-        <div className="quick-actions">
-          <Button
-            appearance="primary"
-            onClick={async () => setHealth(await mockApi.health())}
-          >
-            Kiểm tra API health
-          </Button>
-          <Button
-            appearance="secondary"
-            onClick={() => {
-              resetDemo();
-              notify({ ok: true, message: "Đã khôi phục dữ liệu mock." });
-            }}
-          >
-            Reset mock data
-          </Button>
-        </div>
       </SectionPanel>
     </div>
   );
