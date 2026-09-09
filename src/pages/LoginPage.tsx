@@ -1,48 +1,57 @@
-import { Badge, Button, Field, Input } from "@fluentui/react-components";
+import { Badge, Button, Field, Input, Spinner } from "@fluentui/react-components";
 import {
-  ArrowRightRegular,
   CheckmarkCircleRegular,
   ClockRegular,
   PeopleTeamRegular,
-  PersonRegular,
   ShieldCheckmarkRegular,
 } from "@fluentui/react-icons";
-import { Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useAppStore } from "../store/useAppStore";
-import type { UserRole } from "../types/domain";
-import { useNotify } from "../components/useNotify";
+import { Navigate, useNavigate } from "react-router-dom";
+import { FieldError } from "../components/ui";
+import { authApi } from "../services/api";
+import { errorMessage } from "../services/http";
+import { useAuthStore } from "../store/useAuthStore";
+
+function homePathForRole(role: string | null) {
+  if (role === "employee") return "/employee/dashboard";
+  if (role === "manager") return "/manager/dashboard";
+  if (role === "admin") return "/admin/employees";
+  return "/login";
+}
 
 export function LoginPage() {
-  const role = useAppStore((state) => state.role);
-  const login = useAppStore((state) => state.login);
-  const loginWithPassword = useAppStore((state) => state.loginWithPassword);
+  const session = useAuthStore((state) => state.session);
+  const role = useAuthStore((state) => state.role);
+  const setSession = useAuthStore((state) => state.setSession);
   const navigate = useNavigate();
-  const notify = useNotify();
-  const [credentials, setCredentials] = useState({
-    username: "admin",
-    password: "123456",
-  });
+  const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(false);
 
-  if (role)
-    return (
-      <Navigate
-        to={role === "employee" ? "/employee/home" : "/hr/dashboard"}
-        replace
-      />
-    );
+  if (session) return <Navigate to={homePathForRole(role)} replace />;
 
-  const enter = (selectedRole: UserRole) => {
-    login(selectedRole);
-    navigate(selectedRole === "employee" ? "/employee/home" : "/hr/dashboard");
-  };
-
-  const submitLogin = () => {
-    const result = loginWithPassword(credentials.username, credentials.password);
-    notify(result);
-    if (result.ok) {
-      const nextRole = useAppStore.getState().role;
-      navigate(nextRole === "employee" ? "/employee/home" : "/hr/dashboard");
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(undefined);
+    if (!credentials.username.trim() || !credentials.password) {
+      setError("Vui lòng nhập tên đăng nhập và mật khẩu.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await authApi.login(credentials.username, credentials.password);
+      setSession({
+        token: result.token,
+        username: result.username,
+        employeeCode: result.employeeCode,
+        roles: result.roles,
+      });
+      const nextRole = useAuthStore.getState().role;
+      navigate(homePathForRole(nextRole));
+    } catch (err) {
+      setError(errorMessage(err, "Đăng nhập thất bại. Vui lòng thử lại."));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -53,31 +62,31 @@ export function LoginPage() {
           <span className="brand-mark">
             <ClockRegular />
           </span>
-          <span>Bussines</span>
+          <span>EMS</span>
         </div>
         <div className="login-copy">
           <Badge appearance="tint" color="informative">
-            Dữ liệu minh họa
+            Kết nối API thật
           </Badge>
           <h1 id="product-name">
-            Mỗi ca làm.
+            Quản lý nhân sự,
             <br />
-            Một bản ghi rõ ràng.
+            chấm công và kinh doanh.
           </h1>
-          <p>Không gian chấm công và nhân sự minh họa cho đồ án sinh viên.</p>
+          <p>Đăng nhập bằng tài khoản đã được cấp để vào không gian làm việc.</p>
         </div>
         <ul className="login-points">
           <li>
             <CheckmarkCircleRegular />
-            <span>Chấm công theo vị trí</span>
+            <span>Chấm công, nghỉ phép, sale theo thời gian thực</span>
           </li>
           <li>
             <ShieldCheckmarkRegular />
-            <span>Phân quyền HR và nhân viên</span>
+            <span>Phân quyền Employee / Manager / Admin</span>
           </li>
           <li>
             <PeopleTeamRegular />
-            <span>32 hồ sơ nhân sự minh họa</span>
+            <span>Dữ liệu đồng bộ trực tiếp từ hệ thống</span>
           </li>
         </ul>
       </section>
@@ -88,83 +97,41 @@ export function LoginPage() {
             <span className="mobile-login-mark">
               <ClockRegular />
             </span>
-            <h2 id="login-title">Chọn không gian làm việc</h2>
-            <p>
-              Prototype không yêu cầu mật khẩu. Chọn vai trò để bắt đầu luồng
-              demo.
-            </p>
+            <h2 id="login-title">Đăng nhập</h2>
+            <p>Nhập tài khoản được cấp bởi quản trị viên hệ thống.</p>
           </div>
 
-          <div className="role-options">
-            <form
-              className="login-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                submitLogin();
-              }}
-            >
-              <Field label="Tên đăng nhập">
-                <Input
-                  value={credentials.username}
-                  onChange={(_, data) =>
-                    setCredentials((value) => ({
-                      ...value,
-                      username: data.value,
-                    }))
-                  }
-                />
-              </Field>
-              <Field label="Mật khẩu">
-                <Input
-                  type="password"
-                  value={credentials.password}
-                  onChange={(_, data) =>
-                    setCredentials((value) => ({
-                      ...value,
-                      password: data.value,
-                    }))
-                  }
-                />
-              </Field>
-              <Button appearance="primary" type="submit">
-                Đăng nhập
-              </Button>
-            </form>
-            <button
-              type="button"
-              className="role-option"
-              onClick={() => enter("hr")}
-            >
-              <span className="role-icon">
-                <PeopleTeamRegular />
-              </span>
-              <span className="role-content">
-                <strong>Nhân sự</strong>
-                <small>Quản lý nhân viên, ca làm, đơn từ và báo cáo</small>
-              </span>
-              <ArrowRightRegular />
-            </button>
-            <button
-              type="button"
-              className="role-option"
-              onClick={() => enter("employee")}
-            >
-              <span className="role-icon">
-                <PersonRegular />
-              </span>
-              <span className="role-content">
-                <strong>Nhân viên</strong>
-                <small>Check-in, xem lịch ca và gửi đơn nghỉ phép</small>
-              </span>
-              <ArrowRightRegular />
-            </button>
-          </div>
+          <form className="login-form" onSubmit={submit}>
+            <Field label="Tên đăng nhập" required>
+              <Input
+                value={credentials.username}
+                autoComplete="username"
+                onChange={(_, data) =>
+                  setCredentials((value) => ({ ...value, username: data.value }))
+                }
+              />
+            </Field>
+            <Field label="Mật khẩu" required>
+              <Input
+                type="password"
+                autoComplete="current-password"
+                value={credentials.password}
+                onChange={(_, data) =>
+                  setCredentials((value) => ({ ...value, password: data.value }))
+                }
+              />
+            </Field>
+            <FieldError message={error} />
+            <Button appearance="primary" type="submit" disabled={loading}>
+              {loading ? <Spinner size="tiny" /> : "Đăng nhập"}
+            </Button>
+          </form>
 
           <div className="login-note">
             <strong>Lưu ý</strong>
             <p>
-              Dữ liệu được lưu trong trình duyệt và có thể đặt lại từ menu Công
-              cụ demo.
+              Hệ thống gọi trực tiếp API backend (EnterpriseManagement.Api). Hãy đảm
+              bảo backend đang chạy tại http://localhost:5068.
             </p>
           </div>
         </div>

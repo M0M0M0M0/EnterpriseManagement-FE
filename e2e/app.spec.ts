@@ -7,117 +7,39 @@ async function reset(page: Page) {
   await page.reload();
 }
 
-async function loginHr(page: Page) {
-  await page.getByRole("button", { name: /^Nhân sự/ }).click();
-  await expect(page).toHaveURL(/\/hr\/dashboard$/);
+async function loginAdmin(page: Page) {
+  await page.getByLabel("Tên đăng nhập").fill("admin");
+  await page.getByLabel("Mật khẩu").fill("admin");
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+  await expect(page).toHaveURL(/\/admin\/employees$/);
   await expect(
-    page.getByRole("heading", { name: "Tổng quan nhân sự" }),
+    page.getByRole("heading", { name: "Quản lý nhân viên" }),
   ).toBeVisible();
-}
-
-async function loginEmployee(page: Page) {
-  await page.getByRole("button", { name: /^Nhân viên/ }).click();
-  await expect(page).toHaveURL(/\/employee\/home$/);
-  await expect(page.getByRole("heading", { name: /^Chào / })).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => reset(page));
 
-test("HR đăng nhập, tạo nhân viên và thấy dữ liệu sau khi tải lại", async ({
+test("admin đăng nhập bằng tài khoản thật và thấy trang quản lý nhân viên", async ({
   page,
 }) => {
-  await loginHr(page);
-  await page.getByRole("link", { name: "Nhân viên" }).click();
-  await page.getByRole("button", { name: "Thêm nhân viên" }).click();
-
-  await page.getByLabel("Họ và tên").fill("Nguyễn Minh Kiểm Thử");
-  await page.getByLabel("Số điện thoại").fill("0909123456");
-  await page.getByLabel("Email").fill("kiemthu@bussines.demo");
-  await page.getByLabel("Địa chỉ").fill("Quận 1, TP. Hồ Chí Minh");
-  await page.getByRole("button", { name: "Lưu hồ sơ" }).click();
-
-  await expect(page.getByText("Nguyễn Minh Kiểm Thử").first()).toBeVisible();
-  await page.reload();
-  await expect(page.getByText("Nguyễn Minh Kiểm Thử").first()).toBeVisible();
-
-  await page.getByRole("link", { name: "Ca làm" }).click();
-  await page.getByRole("button", { name: "Gán ca" }).click();
-  await page.getByRole("button", { name: "Xác nhận" }).click();
-  await expect(page.getByText("Đã gán ca cho nhân viên.").last()).toBeVisible();
-});
-
-test("HR lọc chấm công và xuất báo cáo CSV", async ({ page }) => {
-  await loginHr(page);
-  await page.getByRole("link", { name: "Chấm công" }).click();
+  await loginAdmin(page);
+  await page.getByRole("link", { name: "Phòng ban & chức vụ" }).click();
   await expect(
-    page.getByRole("heading", { name: "Quản lý chấm công" }),
+    page.getByRole("heading", { name: "Phòng ban & chức vụ" }),
   ).toBeVisible();
-  await page.getByLabel("Ngày").fill("2026-08-17");
-  await expect(
-    page.getByRole("heading", { name: "Bản ghi ngày 17/08/2026" }),
-  ).toBeVisible();
-
-  await page.getByLabel("Tìm nhân viên").fill("NV015");
-  await expect(page.getByRole("grid").getByText("NV015")).toBeVisible();
-  await page.getByLabel("Tìm nhân viên").clear();
-
-  await page.getByRole("button", { name: "Duyệt" }).first().click();
-  await expect(page.getByText("Đã duyệt yêu cầu.").last()).toBeVisible();
-
-  await page.getByRole("link", { name: "Nghỉ phép" }).click();
-  await page.getByRole("button", { name: "Duyệt" }).first().click();
-  await expect(page.getByText("Đã duyệt yêu cầu.").last()).toBeVisible();
-
-  await page.getByRole("link", { name: "Báo cáo" }).click();
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Xuất CSV" }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/bao-cao-cham-cong.*\.csv/);
 });
 
-test("nhân viên gửi điều chỉnh chấm công và đơn nghỉ phép", async ({
-  page,
-}) => {
-  await loginEmployee(page);
-  await page.getByRole("link", { name: "Chấm công" }).click();
-  await page.getByRole("button", { name: "Điều chỉnh" }).click();
-  await page.getByLabel("Lý do").fill("Thiết bị cá nhân hết pin");
-  await page.getByRole("button", { name: "Gửi yêu cầu" }).click();
-  await expect(
-    page.getByText("Đã gửi yêu cầu điều chỉnh chấm công.").last(),
-  ).toBeVisible();
-
-  await page.getByRole("link", { name: "Nghỉ phép" }).click();
-  await page.getByRole("button", { name: "Tạo đơn" }).click();
-  await page.getByLabel("Từ ngày").fill("2035-06-04");
-  await page.getByLabel("Đến ngày").fill("2035-06-05");
-  await page.getByLabel("Lý do").fill("Khám sức khỏe định kỳ");
-  await page.getByRole("button", { name: "Gửi đơn" }).click();
-  await expect(page.getByText("Khám sức khỏe định kỳ").first()).toBeVisible();
+test("đăng nhập sai mật khẩu hiển thị lỗi", async ({ page }) => {
+  await page.getByLabel("Tên đăng nhập").fill("admin");
+  await page.getByLabel("Mật khẩu").fill("sai-mat-khau");
+  await page.getByRole("button", { name: "Đăng nhập" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
 });
 
-test("nhân viên check-in, tải lại vẫn giữ trạng thái và check-out", async ({
-  page,
-}) => {
-  await loginEmployee(page);
-  await page.getByRole("button", { name: /Đặng Thùy Linh/ }).click();
-  await page.getByRole("menuitem", { name: "Công cụ demo" }).click();
-  await page.getByLabel("Ngày mô phỏng").fill("2035-05-12");
-  await page.getByRole("button", { name: "Đóng" }).click();
-
-  await page.getByRole("button", { name: /Check-in/ }).click();
-  await expect(page.getByRole("button", { name: /Check-out/ })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole("button", { name: /Check-out/ })).toBeVisible();
-  await page.getByRole("button", { name: /Check-out/ }).click();
-  await expect(page.getByText("Đã hoàn thành ca làm hôm nay")).toBeVisible();
-});
-
-test("phân quyền chặn nhân viên khỏi route HR", async ({ page }) => {
-  await loginEmployee(page);
-  await page.goto("/hr/employees");
+test("khách chưa đăng nhập bị chặn khỏi route admin", async ({ page }) => {
+  await page.goto("/admin/employees");
   await expect(
-    page.getByRole("heading", { name: "Không có quyền truy cập" }),
+    page.getByRole("heading", { name: "Đăng nhập" }),
   ).toBeVisible();
 });
 
@@ -125,9 +47,7 @@ test("màn hình 360px không tràn ngang và login không có lỗi accessibili
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
-  await expect(
-    page.getByRole("heading", { name: "Chọn không gian làm việc" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Đăng nhập" })).toBeVisible();
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
   );

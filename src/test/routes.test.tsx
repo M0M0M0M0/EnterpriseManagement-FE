@@ -1,12 +1,10 @@
 import { FluentProvider } from "@fluentui/react-components";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import App from "../App";
 import { appTheme } from "../app/theme";
-import { createSeedData } from "../data/seed";
-import { useAppStore } from "../store/useAppStore";
+import { useAuthStore } from "../store/useAuthStore";
 
 function renderApp(path: string) {
   return render(
@@ -20,40 +18,33 @@ function renderApp(path: string) {
 
 describe("xác thực và phân quyền", () => {
   beforeEach(() => {
-    useAppStore.setState({
-      ...createSeedData(),
-      role: null,
-      currentEmployeeId: null,
-      demo: { locationMode: "inside", simulateError: false },
+    useAuthStore.setState({ session: null, role: null });
+  });
+
+  it("chuyển khách chưa đăng nhập về màn hình đăng nhập", () => {
+    renderApp("/admin/employees");
+    expect(screen.getByRole("heading", { name: /đăng nhập/i })).toBeInTheDocument();
+  });
+
+  it("chặn nhân viên truy cập route Admin", () => {
+    useAuthStore.setState({
+      session: { token: "t", username: "nv1", employeeCode: "EMP001", roles: ["EMPLOYEE"] },
+      role: "employee",
     });
-  });
-
-  it("chuyển khách chưa đăng nhập về màn hình chọn vai trò", () => {
-    renderApp("/hr/dashboard");
-    expect(
-      screen.getByRole("heading", { name: /chọn không gian làm việc/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("chặn nhân viên truy cập route HR", () => {
-    useAppStore.setState({ role: "employee", currentEmployeeId: "emp-006" });
-    renderApp("/hr/dashboard");
+    renderApp("/admin/employees");
     expect(
       screen.getByRole("heading", { name: /không có quyền truy cập/i }),
     ).toBeInTheDocument();
   });
 
-  it("đăng nhập HR bằng tài khoản demo", async () => {
-    const user = userEvent.setup();
-    renderApp("/login");
-    await user.click(screen.getByRole("button", { name: /^nhân sự/i }));
+  it("hiển thị trang không tìm thấy cho đường dẫn không hợp lệ", () => {
+    useAuthStore.setState({
+      session: { token: "t", username: "admin", roles: ["ADMIN"] },
+      role: "admin",
+    });
+    renderApp("/duong-dan-khong-ton-tai");
     expect(
-      await screen.findByRole(
-        "heading",
-        { name: /tổng quan nhân sự/i },
-        { timeout: 5000 },
-      ),
+      screen.getByRole("heading", { name: /không tìm thấy trang/i }),
     ).toBeInTheDocument();
-    expect(useAppStore.getState().role).toBe("hr");
   });
 });

@@ -2,139 +2,92 @@ import { Skeleton, SkeletonItem } from "@fluentui/react-components";
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
-import { AccessDeniedPage, NotFoundPage } from "./pages/CommonPages";
 import {
-  HrAttendancePage,
-  HrDashboardPage,
-} from "./pages/HrDashboardAttendance";
+  AccessDeniedPage,
+  AccountSettingsPage,
+  NotFoundPage,
+  ProfilePage,
+} from "./pages/CommonPages";
 import { LoginPage } from "./pages/LoginPage";
-import { useAppStore } from "./store/useAppStore";
+import { useAuthStore } from "./store/useAuthStore";
 import type { UserRole } from "./types/domain";
 
-const EmployeeHomePage = lazy(() =>
-  import("./pages/EmployeePages").then((module) => ({
-    default: module.EmployeeHomePage,
-  })),
+const EmployeeDashboardPage = lazy(() =>
+  import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeDashboardPage })),
 );
 const EmployeeAttendancePage = lazy(() =>
-  import("./pages/EmployeePages").then((module) => ({
-    default: module.EmployeeAttendancePage,
-  })),
-);
-const EmployeeSchedulePage = lazy(() =>
-  import("./pages/EmployeePages").then((module) => ({
-    default: module.EmployeeSchedulePage,
-  })),
+  import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeAttendancePage })),
 );
 const EmployeeLeavePage = lazy(() =>
-  import("./pages/EmployeePages").then((module) => ({
-    default: module.EmployeeLeavePage,
-  })),
+  import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeLeavePage })),
 );
-const EmployeeProfilePage = lazy(() =>
-  import("./pages/EmployeePages").then((module) => ({
-    default: module.EmployeeProfilePage,
-  })),
+const EmployeeSalesPage = lazy(() =>
+  import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeSalesPage })),
 );
-const HrEmployeesPage = lazy(() =>
-  import("./pages/HrManagementPages").then((module) => ({
-    default: module.HrEmployeesPage,
-  })),
-);
-const HrEmployeeDetailPage = lazy(() =>
-  import("./pages/HrManagementPages").then((module) => ({
-    default: module.HrEmployeeDetailPage,
-  })),
-);
-const HrOrganizationPage = lazy(() =>
-  import("./pages/HrManagementPages").then((module) => ({
-    default: module.HrOrganizationPage,
-  })),
-);
-const HrShiftsPage = lazy(() =>
-  import("./pages/HrManagementPages").then((module) => ({
-    default: module.HrShiftsPage,
-  })),
-);
-const HrLeavePage = lazy(() =>
-  import("./pages/HrManagementPages").then((module) => ({
-    default: module.HrLeavePage,
-  })),
-);
-const HrReportsPage = lazy(() =>
-  import("./pages/HrManagementPages").then((module) => ({
-    default: module.HrReportsPage,
-  })),
-);
-const CustomersPage = lazy(() =>
-  import("./pages/EnterprisePages").then((module) => ({
-    default: module.CustomersPage,
-  })),
-);
-const SalesRecordsPage = lazy(() =>
-  import("./pages/EnterprisePages").then((module) => ({
-    default: module.SalesRecordsPage,
-  })),
-);
-const KpiPage = lazy(() =>
-  import("./pages/EnterprisePages").then((module) => ({
-    default: module.KpiPage,
-  })),
-);
-const PayrollPage = lazy(() =>
-  import("./pages/EnterprisePages").then((module) => ({
-    default: module.PayrollPage,
-  })),
-);
-const AdminUsersPage = lazy(() =>
-  import("./pages/EnterprisePages").then((module) => ({
-    default: module.AdminUsersPage,
-  })),
-);
-const AuditLogPage = lazy(() =>
-  import("./pages/EnterprisePages").then((module) => ({
-    default: module.AuditLogPage,
-  })),
+const EmployeeCustomersPage = lazy(() =>
+  import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeCustomersPage })),
 );
 
-function RequireRole({
-  role,
-  children,
-}: {
-  role: UserRole;
-  children: ReactNode;
-}) {
-  const currentRole = useAppStore((state) => state.role);
+const ManagerDashboardPage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerDashboardPage })),
+);
+const ManagerEmployeesPage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerEmployeesPage })),
+);
+const ManagerAttendancePage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerAttendancePage })),
+);
+const ManagerLeavePage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerLeavePage })),
+);
+const ManagerSalesPage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerSalesPage })),
+);
+const ManagerCustomersPage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerCustomersPage })),
+);
+const ManagerOrganizationPage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerOrganizationPage })),
+);
+
+const AdminUsersPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminUsersPage })),
+);
+const AdminEmployeesPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminEmployeesPage })),
+);
+const AdminOrganizationPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminOrganizationPage })),
+);
+const AdminCustomersPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminCustomersPage })),
+);
+const AdminPayrollPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminPayrollPage })),
+);
+const AdminAuditLogPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminAuditLogPage })),
+);
+const AdminSystemPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminSystemPage })),
+);
+
+function RequireRole({ role, children }: { role: UserRole; children: ReactNode }) {
+  const currentRole = useAuthStore((state) => state.role);
   if (!currentRole) return <Navigate to="/login" replace />;
-  if (role === "hr") {
-    if (currentRole === "employee") return <Navigate to="/403" replace />;
-    return children;
-  }
   if (currentRole !== role) return <Navigate to="/403" replace />;
   return children;
 }
 
-function RequirePermission({
-  permission,
-  children,
-}: {
-  permission: string;
-  children: ReactNode;
-}) {
-  const currentRole = useAppStore((state) => state.role);
-  const hasPermission = useAppStore((state) => state.hasPermission);
+function RequireAuth({ children }: { children: ReactNode }) {
+  const currentRole = useAuthStore((state) => state.role);
   if (!currentRole) return <Navigate to="/login" replace />;
-  if (!hasPermission(permission)) return <Navigate to="/403" replace />;
   return children;
 }
 
 function RouteLoading() {
   return (
-    <div
-      className="route-loading"
-      role="status"
-      aria-label="Đang tải dữ liệu minh họa"
-    >
+    <div className="route-loading" role="status" aria-label="Đang tải dữ liệu">
       <Skeleton>
         <SkeletonItem size={32} />
         <SkeletonItem />
@@ -146,14 +99,11 @@ function RouteLoading() {
 }
 
 function AppRedirect() {
-  const role = useAppStore((state) => state.role);
+  const role = useAuthStore((state) => state.role);
   if (!role) return <Navigate to="/login" replace />;
-  return (
-    <Navigate
-      to={role === "employee" ? "/employee/home" : "/hr/dashboard"}
-      replace
-    />
-  );
+  if (role === "employee") return <Navigate to="/employee/dashboard" replace />;
+  if (role === "manager") return <Navigate to="/manager/dashboard" replace />;
+  return <Navigate to="/admin/employees" replace />;
 }
 
 function App() {
@@ -164,125 +114,9 @@ function App() {
         <Route path="/403" element={<AccessDeniedPage />} />
         <Route path="/app" element={<AppRedirect />} />
 
-        <Route
-          element={
-            <RequireRole role="hr">
-              <AppShell />
-            </RequireRole>
-          }
-        >
-          <Route
-            path="/hr/dashboard"
-            element={
-              <RequirePermission permission="dashboard.view">
-                <HrDashboardPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/hr/attendance"
-            element={
-              <RequirePermission permission="attendance.view">
-                <HrAttendancePage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/hr/employees"
-            element={
-              <RequirePermission permission="employee.view">
-                <HrEmployeesPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/hr/employees/:employeeId"
-            element={
-              <RequirePermission permission="employee.view">
-                <HrEmployeeDetailPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/hr/organization"
-            element={
-              <RequirePermission permission="department.view">
-                <HrOrganizationPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/hr/shifts"
-            element={
-              <RequirePermission permission="attendance.view">
-                <HrShiftsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/hr/leave"
-            element={
-              <RequirePermission permission="leave.view">
-                <HrLeavePage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/hr/reports"
-            element={
-              <RequirePermission permission="report.view">
-                <HrReportsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/sales/customers"
-            element={
-              <RequirePermission permission="customer.view">
-                <CustomersPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/sales/records"
-            element={
-              <RequirePermission permission="sale.view">
-                <SalesRecordsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/sales/kpis"
-            element={
-              <RequirePermission permission="kpi.view">
-                <KpiPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/payroll"
-            element={
-              <RequirePermission permission="payroll.view">
-                <PayrollPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/users"
-            element={
-              <RequirePermission permission="user.view">
-                <AdminUsersPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/audit"
-            element={
-              <RequirePermission permission="audit.view">
-                <AuditLogPage />
-              </RequirePermission>
-            }
-          />
+        <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/account-settings" element={<AccountSettingsPage />} />
         </Route>
 
         <Route
@@ -292,14 +126,43 @@ function App() {
             </RequireRole>
           }
         >
-          <Route path="/employee/home" element={<EmployeeHomePage />} />
-          <Route
-            path="/employee/attendance"
-            element={<EmployeeAttendancePage />}
-          />
-          <Route path="/employee/schedule" element={<EmployeeSchedulePage />} />
+          <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
+          <Route path="/employee/attendance" element={<EmployeeAttendancePage />} />
           <Route path="/employee/leave" element={<EmployeeLeavePage />} />
-          <Route path="/employee/profile" element={<EmployeeProfilePage />} />
+          <Route path="/employee/sales" element={<EmployeeSalesPage />} />
+          <Route path="/employee/customers" element={<EmployeeCustomersPage />} />
+        </Route>
+
+        <Route
+          element={
+            <RequireRole role="manager">
+              <AppShell />
+            </RequireRole>
+          }
+        >
+          <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
+          <Route path="/manager/employees" element={<ManagerEmployeesPage />} />
+          <Route path="/manager/attendance" element={<ManagerAttendancePage />} />
+          <Route path="/manager/leave" element={<ManagerLeavePage />} />
+          <Route path="/manager/sales" element={<ManagerSalesPage />} />
+          <Route path="/manager/customers" element={<ManagerCustomersPage />} />
+          <Route path="/manager/organization" element={<ManagerOrganizationPage />} />
+        </Route>
+
+        <Route
+          element={
+            <RequireRole role="admin">
+              <AppShell />
+            </RequireRole>
+          }
+        >
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/employees" element={<AdminEmployeesPage />} />
+          <Route path="/admin/organization" element={<AdminOrganizationPage />} />
+          <Route path="/admin/customers" element={<AdminCustomersPage />} />
+          <Route path="/admin/payroll" element={<AdminPayrollPage />} />
+          <Route path="/admin/audit-log" element={<AdminAuditLogPage />} />
+          <Route path="/admin/system" element={<AdminSystemPage />} />
         </Route>
 
         <Route path="/" element={<Navigate to="/app" replace />} />

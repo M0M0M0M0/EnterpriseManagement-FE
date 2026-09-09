@@ -1,36 +1,37 @@
 import { Badge, Button, type BadgeProps } from "@fluentui/react-components";
 import { BoxRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
-import type { AttendanceStatus, RequestStatus } from "../types/domain";
 import { attendanceLabels, getInitials, requestLabels } from "../utils/format";
 
-const attendanceColors: Record<AttendanceStatus, BadgeProps["color"]> = {
-  "on-time": "success",
-  late: "warning",
-  "early-leave": "warning",
-  absent: "danger",
-  "missing-checkout": "informative",
+const attendanceColors: Record<string, BadgeProps["color"]> = {
+  Present: "success",
+  Late: "warning",
+  HalfDay: "warning",
+  Absent: "danger",
+  OnLeave: "informative",
 };
 
-const requestColors: Record<RequestStatus, BadgeProps["color"]> = {
-  pending: "warning",
-  approved: "success",
-  rejected: "danger",
-  cancelled: "subtle",
+const requestColors: Record<string, BadgeProps["color"]> = {
+  Pending: "warning",
+  Approved: "success",
+  Confirmed: "success",
+  Completed: "success",
+  Rejected: "danger",
+  Cancelled: "subtle",
 };
 
-export function AttendanceBadge({ status }: { status: AttendanceStatus }) {
+export function AttendanceBadge({ status }: { status: string }) {
   return (
-    <Badge appearance="tint" color={attendanceColors[status]} shape="rounded">
-      {attendanceLabels[status]}
+    <Badge appearance="tint" color={attendanceColors[status] ?? "subtle"} shape="rounded">
+      {attendanceLabels[status] ?? status}
     </Badge>
   );
 }
 
-export function RequestBadge({ status }: { status: RequestStatus }) {
+export function RequestBadge({ status }: { status: string }) {
   return (
-    <Badge appearance="tint" color={requestColors[status]} shape="rounded">
-      {requestLabels[status]}
+    <Badge appearance="tint" color={requestColors[status] ?? "subtle"} shape="rounded">
+      {requestLabels[status] ?? status}
     </Badge>
   );
 }

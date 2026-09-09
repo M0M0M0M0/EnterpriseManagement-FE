@@ -1,10 +1,5 @@
-import { differenceInCalendarDays, format, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
-import type {
-  AttendanceStatus,
-  LeaveType,
-  RequestStatus,
-} from "../types/domain";
 
 export const TIMEZONE = "Asia/Ho_Chi_Minh";
 
@@ -46,31 +41,21 @@ export function getInitials(name: string) {
     .join("");
 }
 
-export function countLeaveDays(startDate: string, endDate: string) {
-  return differenceInCalendarDays(parseISO(endDate), parseISO(startDate)) + 1;
-}
-
-export const attendanceLabels: Record<AttendanceStatus, string> = {
-  "on-time": "Đúng giờ",
-  late: "Đi muộn",
-  "early-leave": "Về sớm",
-  absent: "Vắng mặt",
-  "missing-checkout": "Thiếu check-out",
+export const attendanceLabels: Record<string, string> = {
+  Present: "Đúng giờ",
+  Late: "Đi muộn",
+  HalfDay: "Nửa ngày",
+  Absent: "Vắng mặt",
+  OnLeave: "Nghỉ phép",
 };
 
-export const requestLabels: Record<RequestStatus, string> = {
-  pending: "Chờ duyệt",
-  approved: "Đã duyệt",
-  rejected: "Từ chối",
-  cancelled: "Đã hủy",
-};
-
-export const leaveTypeLabels: Record<LeaveType, string> = {
-  annual: "Nghỉ phép năm",
-  sick: "Nghỉ ốm",
-  unpaid: "Nghỉ không lương",
-  compensatory: "Nghỉ bù",
-  other: "Khác",
+export const requestLabels: Record<string, string> = {
+  Pending: "Chờ duyệt",
+  Approved: "Đã duyệt",
+  Confirmed: "Đã xác nhận",
+  Completed: "Hoàn tất",
+  Rejected: "Từ chối",
+  Cancelled: "Đã hủy",
 };
 
 export function formatCurrency(value: number) {
