@@ -250,9 +250,103 @@ export interface CreateUserRequest {
   employeeCode?: string;
 }
 
+export interface UpdateUserRequest {
+  email?: string;
+  employeeCode?: string;
+  roleCodes?: string[];
+  isActive?: boolean;
+}
+
 export interface CreateUserResult {
   user: UserDto;
   generatedPassword: string;
+}
+
+export interface RoleDto {
+  roleCode: string;
+  roleName: string;
+  description?: string;
+  permissions: string[];
+  isActive: boolean;
+}
+
+export interface CreateRoleRequest {
+  roleCode: string;
+  roleName: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface UpdateRoleRequest {
+  roleName: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface PermissionDto {
+  permissionCode: string;
+  permissionName: string;
+  module: string;
+  description?: string;
+  isActive: boolean;
+}
+
+export interface CreatePermissionRequest {
+  permissionCode: string;
+  permissionName: string;
+  module: string;
+  description?: string;
+}
+
+export interface UpdatePermissionRequest {
+  permissionName: string;
+  module: string;
+  description?: string;
+}
+
+export interface MenuDto {
+  menuCode: string;
+  menuName: string;
+  icon?: string;
+  route: string;
+  displayOrder: number;
+  permissions: string[];
+  isVisible: boolean;
+  isActive: boolean;
+}
+
+export interface CreateMenuRequest {
+  menuCode: string;
+  menuName: string;
+  icon?: string;
+  route: string;
+  displayOrder: number;
+  permissions: string[];
+}
+
+export interface UpdateMenuRequest {
+  menuName: string;
+  icon?: string;
+  route: string;
+  displayOrder: number;
+  permissions: string[];
+}
+
+export interface AuditLogDto {
+  id: number | string;
+  createdAt: string;
+  username?: string;
+  module: string;
+  action: string;
+  target?: string;
+  ipAddress?: string;
+}
+
+export interface AuditLogFilters {
+  username?: string;
+  module?: string;
+  action?: string;
+  date?: string;
 }
 
 export interface SalaryCalculationResult {

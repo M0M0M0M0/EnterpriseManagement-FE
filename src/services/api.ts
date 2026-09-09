@@ -6,6 +6,9 @@ import type {
   CreateCustomerRequest,
   CreateDepartmentRequest,
   CreateEmployeeRequest,
+  CreateMenuRequest,
+  CreatePermissionRequest,
+  CreateRoleRequest,
   CreatePositionRequest,
   CreateUserRequest,
   CreateUserResult,
@@ -13,11 +16,16 @@ import type {
   DepartmentDto,
   EmployeeDashboardDto,
   EmployeeDto,
+  AuditLogDto,
+  AuditLogFilters,
   LeaveBalanceDto,
   LeaveRequestDto,
   LeaveTypeDto,
   ManagerDashboardDto,
+  MenuDto,
+  PermissionDto,
   PositionDto,
+  RoleDto,
   SaleDto,
   SalaryCalculationResult,
   SubmitAdjustmentRequest,
@@ -25,8 +33,12 @@ import type {
   SubmitSaleRequest,
   UpdateDepartmentRequest,
   UpdateEmployeeRequest,
+  UpdateMenuRequest,
+  UpdatePermissionRequest,
   UpdatePositionRequest,
+  UpdateRoleRequest,
   UpdateSaleRequest,
+  UpdateUserRequest,
   UserDto,
 } from "../types/domain";
 
@@ -157,8 +169,53 @@ export const saleApi = {
 export const userApi = {
   getAll: () => http.get<UserDto[]>("/users"),
   create: (request: CreateUserRequest) => http.post<CreateUserResult>("/users", request),
+  update: (username: string, request: UpdateUserRequest) =>
+    http.put<UserDto>(`/users/${username}`, request),
+  setRoles: (username: string, roleCodes: string[]) =>
+    http.put<UserDto>(`/users/${username}/roles`, { roleCodes }),
   setActive: (username: string, isActive: boolean) =>
     http.put<UserDto>(`/users/${username}/active`, { isActive }),
+};
+
+export const roleApi = {
+  getAll: () => http.get<RoleDto[]>("/roles"),
+  create: (request: CreateRoleRequest) => http.post<RoleDto>("/roles", request),
+  update: (roleCode: string, request: UpdateRoleRequest) =>
+    http.put<RoleDto>(`/roles/${roleCode}`, request),
+  setActive: (roleCode: string, isActive: boolean) =>
+    http.put<RoleDto>(`/roles/${roleCode}/active`, { isActive }),
+};
+
+export const permissionApi = {
+  getAll: () => http.get<PermissionDto[]>("/permissions"),
+  create: (request: CreatePermissionRequest) =>
+    http.post<PermissionDto>("/permissions", request),
+  update: (permissionCode: string, request: UpdatePermissionRequest) =>
+    http.put<PermissionDto>(`/permissions/${permissionCode}`, request),
+  setActive: (permissionCode: string, isActive: boolean) =>
+    http.put<PermissionDto>(`/permissions/${permissionCode}/active`, { isActive }),
+};
+
+export const menuApi = {
+  getAll: () => http.get<MenuDto[]>("/menus"),
+  create: (request: CreateMenuRequest) => http.post<MenuDto>("/menus", request),
+  update: (menuCode: string, request: UpdateMenuRequest) =>
+    http.put<MenuDto>(`/menus/${menuCode}`, request),
+  setVisible: (menuCode: string, isVisible: boolean) =>
+    http.put<MenuDto>(`/menus/${menuCode}/visible`, { isVisible }),
+  setActive: (menuCode: string, isActive: boolean) =>
+    http.put<MenuDto>(`/menus/${menuCode}/active`, { isActive }),
+};
+
+export const auditApi = {
+  getAll: (filters: AuditLogFilters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const query = params.toString();
+    return http.get<AuditLogDto[]>(`/audit-logs${query ? `?${query}` : ""}`);
+  },
 };
 
 export const payrollApi = {

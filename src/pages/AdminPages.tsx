@@ -16,7 +16,7 @@ import {
   TabList,
   Textarea,
 } from "@fluentui/react-components";
-import { AddRegular, CopyRegular } from "@fluentui/react-icons";
+import { AddRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { EmptyState, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
@@ -39,6 +39,15 @@ import type {
 } from "../types/domain";
 import { formatCurrency, formatDate, formatDateTime } from "../utils/format";
 
+export function UnavailablePanel({ description }: { description: string }) {
+  return (
+    <EmptyState
+      title="Chưa khả dụng"
+      description={description}
+    />
+  );
+}
+
 export function AdminUsersPage() {
   const notify = useNotify();
   const [users, setUsers] = useState<UserDto[]>([]);
@@ -50,6 +59,7 @@ export function AdminUsersPage() {
     email: "",
     roleCode: "EMPLOYEE",
     employeeCode: "",
+    password: "",
   });
   const [credential, setCredential] = useState<{ username: string; password: string } | null>(null);
 
@@ -73,7 +83,7 @@ export function AdminUsersPage() {
     try {
       const result = await userApi.create({ ...form, employeeCode: form.employeeCode || undefined });
       setOpen(false);
-      setForm({ username: "", email: "", roleCode: "EMPLOYEE", employeeCode: "" });
+      setForm({ username: "", email: "", roleCode: "EMPLOYEE", employeeCode: "", password: "" });
       setCredential({ username: result.user.username, password: result.generatedPassword });
       load();
     } catch (err) {
@@ -200,6 +210,21 @@ export function AdminUsersPage() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+      {credential ? (
+        <SectionPanel title="Thông tin đăng nhập vừa tạo">
+          <dl className="detail-list">
+            <div>
+              <dt>Tên đăng nhập</dt>
+              <dd>{credential.username}</dd>
+            </div>
+            <div>
+              <dt>Mật khẩu tạm</dt>
+              <dd>{credential.password}</dd>
+            </div>
+          </dl>
+          <Button onClick={copyCredential}>Sao chép</Button>
+        </SectionPanel>
+      ) : null}
     </div>
   );
 }

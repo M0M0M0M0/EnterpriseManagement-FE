@@ -15,14 +15,15 @@ import { useAuthStore } from "../store/useAuthStore";
 function homePathForRole(role: string | null) {
   if (role === "employee") return "/employee/dashboard";
   if (role === "manager") return "/manager/dashboard";
-  if (role === "admin") return "/admin/employees";
+  if (role === "admin") return "/admin/users";
   return "/login";
 }
 
-export function LoginPage() {
+function LoginForm({ mode = "public" }: { mode?: "public" | "admin" }) {
   const session = useAuthStore((state) => state.session);
   const role = useAuthStore((state) => state.role);
   const setSession = useAuthStore((state) => state.setSession);
+  const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [error, setError] = useState<string>();
@@ -47,6 +48,16 @@ export function LoginPage() {
         roles: result.roles,
       });
       const nextRole = useAuthStore.getState().role;
+      if (mode === "public" && nextRole === "admin") {
+        logout();
+        setError("Tài khoản quản trị sử dụng cổng đăng nhập riêng.");
+        return;
+      }
+      if (mode === "admin" && nextRole !== "admin") {
+        logout();
+        setError("Tài khoản không có quyền quản trị.");
+        return;
+      }
       navigate(homePathForRole(nextRole));
     } catch (err) {
       setError(errorMessage(err, "Đăng nhập thất bại. Vui lòng thử lại."));
@@ -98,7 +109,11 @@ export function LoginPage() {
               <ClockRegular />
             </span>
             <h2 id="login-title">Đăng nhập</h2>
-            <p>Nhập tài khoản được cấp bởi quản trị viên hệ thống.</p>
+            <p>
+              {mode === "admin"
+                ? "Cổng đăng nhập dành riêng cho tài khoản quản trị."
+                : "Nhập tài khoản được cấp bởi quản trị viên hệ thống."}
+            </p>
           </div>
 
           <form className="login-form" onSubmit={submit}>
@@ -138,4 +153,12 @@ export function LoginPage() {
       </section>
     </main>
   );
+}
+
+export function LoginPage() {
+  return <LoginForm mode="public" />;
+}
+
+export function AdminLoginPage() {
+  return <LoginForm mode="admin" />;
 }

@@ -8,7 +8,7 @@ import {
   NotFoundPage,
   ProfilePage,
 } from "./pages/CommonPages";
-import { LoginPage } from "./pages/LoginPage";
+import { AdminLoginPage, LoginPage } from "./pages/LoginPage";
 import { useAuthStore } from "./store/useAuthStore";
 import type { UserRole } from "./types/domain";
 
@@ -51,7 +51,7 @@ const ManagerOrganizationPage = lazy(() =>
 );
 
 const AdminUsersPage = lazy(() =>
-  import("./pages/AdminPages").then((m) => ({ default: m.AdminUsersPage })),
+  import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminUsersApiPage })),
 );
 const AdminEmployeesPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminEmployeesPage })),
@@ -63,13 +63,13 @@ const AdminCustomersPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminCustomersPage })),
 );
 const AdminPayrollPage = lazy(() =>
-  import("./pages/AdminPages").then((m) => ({ default: m.AdminPayrollPage })),
+  import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminPayrollDeferredPage })),
 );
 const AdminAuditLogPage = lazy(() =>
-  import("./pages/AdminPages").then((m) => ({ default: m.AdminAuditLogPage })),
+  import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminAuditLogApiPage })),
 );
 const AdminSystemPage = lazy(() =>
-  import("./pages/AdminPages").then((m) => ({ default: m.AdminSystemPage })),
+  import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminSystemApiPage })),
 );
 
 function RequireRole({ role, children }: { role: UserRole; children: ReactNode }) {
@@ -103,7 +103,7 @@ function AppRedirect() {
   if (!role) return <Navigate to="/login" replace />;
   if (role === "employee") return <Navigate to="/employee/dashboard" replace />;
   if (role === "manager") return <Navigate to="/manager/dashboard" replace />;
-  return <Navigate to="/admin/employees" replace />;
+  return <Navigate to="/admin/users" replace />;
 }
 
 function App() {
@@ -111,6 +111,7 @@ function App() {
     <Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/internal/admin-login" element={<AdminLoginPage />} />
         <Route path="/403" element={<AccessDeniedPage />} />
         <Route path="/app" element={<AppRedirect />} />
 
@@ -161,7 +162,8 @@ function App() {
           <Route path="/admin/organization" element={<AdminOrganizationPage />} />
           <Route path="/admin/customers" element={<AdminCustomersPage />} />
           <Route path="/admin/payroll" element={<AdminPayrollPage />} />
-          <Route path="/admin/audit-log" element={<AdminAuditLogPage />} />
+          <Route path="/admin/audit" element={<AdminAuditLogPage />} />
+          <Route path="/admin/audit-log" element={<Navigate to="/admin/audit" replace />} />
           <Route path="/admin/system" element={<AdminSystemPage />} />
         </Route>
 
