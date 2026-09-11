@@ -8,7 +8,7 @@ import {
   NotFoundPage,
   ProfilePage,
 } from "./pages/CommonPages";
-import { AdminLoginPage, LoginPage } from "./pages/LoginPage";
+import { LoginPage } from "./pages/LoginPage";
 import { useAuthStore } from "./store/useAuthStore";
 import type { UserRole } from "./types/domain";
 
@@ -111,7 +111,6 @@ function App() {
     <Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/internal/admin-login" element={<AdminLoginPage />} />
         <Route path="/403" element={<AccessDeniedPage />} />
         <Route path="/app" element={<AppRedirect />} />
 

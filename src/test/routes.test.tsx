@@ -85,18 +85,9 @@ describe("xác thực và phân quyền", () => {
     expect(screen.getByRole("heading", { name: /không có quyền truy cập/i })).toBeInTheDocument();
   });
 
-  it("public login chặn tài khoản admin", async () => {
+  it("admin đăng nhập qua public login và thấy Users nhưng không thấy Payroll trong sidebar", async () => {
     const user = userEvent.setup();
     renderApp("/login");
-    await user.type(screen.getByLabelText(/tên đăng nhập/i), "admin");
-    await user.type(screen.getByLabelText(/mật khẩu/i), "123456");
-    await user.click(screen.getByRole("button", { name: /đăng nhập/i }));
-    expect(await screen.findByText(/tài khoản quản trị sử dụng cổng đăng nhập riêng/i)).toBeInTheDocument();
-  });
-
-  it("admin đăng nhập qua URL ẩn và thấy Users nhưng không thấy Payroll trong sidebar", async () => {
-    const user = userEvent.setup();
-    renderApp("/internal/admin-login");
     await user.type(screen.getByLabelText(/tên đăng nhập/i), "admin");
     await user.type(screen.getByLabelText(/mật khẩu/i), "123456");
     await user.click(screen.getByRole("button", { name: /đăng nhập/i }));
@@ -104,7 +95,6 @@ describe("xác thực và phân quyền", () => {
     const nav = screen.getByRole("navigation", { name: /điều hướng chính/i });
     expect(within(nav).getByRole("link", { name: /system administration/i })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /bảng lương|payroll/i })).not.toBeInTheDocument();
-    expect(screen.queryByText("/internal/admin-login")).not.toBeInTheDocument();
   });
 
   it("hiển thị trang không tìm thấy cho đường dẫn không hợp lệ", () => {

@@ -19,11 +19,10 @@ function homePathForRole(role: string | null) {
   return "/login";
 }
 
-function LoginForm({ mode = "public" }: { mode?: "public" | "admin" }) {
+export function LoginPage() {
   const session = useAuthStore((state) => state.session);
   const role = useAuthStore((state) => state.role);
   const setSession = useAuthStore((state) => state.setSession);
-  const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
   const [credentials, setCredentials] = useState({ username: "", password: "" });
   const [error, setError] = useState<string>();
@@ -47,18 +46,7 @@ function LoginForm({ mode = "public" }: { mode?: "public" | "admin" }) {
         employeeCode: result.employeeCode,
         roles: result.roles,
       });
-      const nextRole = useAuthStore.getState().role;
-      if (mode === "public" && nextRole === "admin") {
-        logout();
-        setError("Tài khoản quản trị sử dụng cổng đăng nhập riêng.");
-        return;
-      }
-      if (mode === "admin" && nextRole !== "admin") {
-        logout();
-        setError("Tài khoản không có quyền quản trị.");
-        return;
-      }
-      navigate(homePathForRole(nextRole));
+      navigate(homePathForRole(useAuthStore.getState().role));
     } catch (err) {
       setError(errorMessage(err, "Đăng nhập thất bại. Vui lòng thử lại."));
     } finally {
@@ -109,11 +97,7 @@ function LoginForm({ mode = "public" }: { mode?: "public" | "admin" }) {
               <ClockRegular />
             </span>
             <h2 id="login-title">Đăng nhập</h2>
-            <p>
-              {mode === "admin"
-                ? "Cổng đăng nhập dành riêng cho tài khoản quản trị."
-                : "Nhập tài khoản được cấp bởi quản trị viên hệ thống."}
-            </p>
+            <p>Nhập tài khoản được cấp bởi quản trị viên hệ thống.</p>
           </div>
 
           <form className="login-form" onSubmit={submit}>
@@ -153,12 +137,4 @@ function LoginForm({ mode = "public" }: { mode?: "public" | "admin" }) {
       </section>
     </main>
   );
-}
-
-export function LoginPage() {
-  return <LoginForm mode="public" />;
-}
-
-export function AdminLoginPage() {
-  return <LoginForm mode="admin" />;
 }

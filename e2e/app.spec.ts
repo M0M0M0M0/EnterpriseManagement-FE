@@ -112,25 +112,21 @@ test("employee và manager đăng nhập qua public login", async ({ page }) => 
   await expect(page.getByRole("heading", { name: /tổng quan quản lý/i })).toBeVisible();
 });
 
-test("public login chặn admin, admin login qua URL ẩn vào Users", async ({ page }) => {
+test("admin đăng nhập qua public login vào Users", async ({ page }) => {
   await login(page, "/login", "admin");
-  await expect(page.getByText(/tài khoản quản trị sử dụng cổng đăng nhập riêng/i)).toBeVisible();
-
-  await login(page, "/internal/admin-login", "admin");
   await expect(page).toHaveURL(/\/admin\/users$/);
   await expect(page.getByRole("heading", { name: /quản lý user \/ role \/ permission/i })).toBeVisible();
 });
 
-test("admin sidebar có System Administration, không hiện Payroll và không lộ URL admin ẩn", async ({ page }) => {
-  await login(page, "/internal/admin-login", "admin");
+test("admin sidebar có System Administration, không hiện Payroll", async ({ page }) => {
+  await login(page, "/login", "admin");
   const nav = page.getByRole("navigation", { name: /điều hướng chính/i });
   await expect(nav.getByRole("link", { name: /system administration/i })).toBeVisible();
   await expect(nav.getByRole("link", { name: /payroll|bảng lương/i })).toHaveCount(0);
-  await expect(page.getByText("/internal/admin-login")).toHaveCount(0);
 });
 
 test("audit, system và payroll đúng trạng thái API-based", async ({ page }) => {
-  await login(page, "/internal/admin-login", "admin");
+  await login(page, "/login", "admin");
 
   await page.getByRole("link", { name: /audit log/i }).click();
   await expect(page).toHaveURL(/\/admin\/audit$/);
