@@ -159,6 +159,8 @@ export const userApi = {
   create: (request: CreateUserRequest) => http.post<CreateUserResult>("/users", request),
   setActive: (username: string, isActive: boolean) =>
     http.put<UserDto>(`/users/${username}/active`, { isActive }),
+  resetPassword: (username: string) =>
+    http.post<CreateUserResult>(`/users/${username}/reset-password`),
 };
 
 export const payrollApi = {

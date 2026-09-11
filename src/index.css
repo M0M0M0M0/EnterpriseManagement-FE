@@ -1216,6 +1216,18 @@ p {
   overflow-wrap: anywhere;
 }
 
+.credential-password-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.credential-password {
+  font-family: "Consolas", "SFMono-Regular", Menlo, monospace;
+  letter-spacing: 0.5px;
+}
+
 /* HR data and management */
 .department-breakdown > div > div {
   gap: 3px;

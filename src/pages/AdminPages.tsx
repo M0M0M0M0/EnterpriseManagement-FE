@@ -16,7 +16,7 @@ import {
   TabList,
   Textarea,
 } from "@fluentui/react-components";
-import { AddRegular, CopyRegular } from "@fluentui/react-icons";
+import { AddRegular, ArrowClockwiseRegular, CopyRegular, EyeOffRegular, EyeRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { EmptyState, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
@@ -51,7 +51,8 @@ export function AdminUsersPage() {
     roleCode: "EMPLOYEE",
     employeeCode: "",
   });
-  const [credential, setCredential] = useState<{ username: string; password: string } | null>(null);
+  const [credential, setCredential] = useState<{ username: string; password: string; isReset: boolean } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -74,7 +75,8 @@ export function AdminUsersPage() {
       const result = await userApi.create({ ...form, employeeCode: form.employeeCode || undefined });
       setOpen(false);
       setForm({ username: "", email: "", roleCode: "EMPLOYEE", employeeCode: "" });
-      setCredential({ username: result.user.username, password: result.generatedPassword });
+      setShowPassword(false);
+      setCredential({ username: result.user.username, password: result.generatedPassword, isReset: false });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -101,6 +103,22 @@ export function AdminUsersPage() {
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
+    }
+  };
+
+  const [resettingUsername, setResettingUsername] = useState<string | null>(null);
+
+  const resetPassword = async (user: UserDto) => {
+    setResettingUsername(user.username);
+    try {
+      const result = await userApi.resetPassword(user.username);
+      setShowPassword(false);
+      setCredential({ username: result.user.username, password: result.generatedPassword, isReset: true });
+      notify({ ok: true, message: "Đã đặt lại mật khẩu." });
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setResettingUsername(null);
     }
   };
 
@@ -145,9 +163,19 @@ export function AdminUsersPage() {
                     </Badge>
                   </td>
                   <td>
-                    <Button size="small" onClick={() => toggleActive(u)}>
-                      {u.isActive ? "Khóa" : "Mở khóa"}
-                    </Button>
+                    <div className="row-actions">
+                      <Button size="small" onClick={() => toggleActive(u)}>
+                        {u.isActive ? "Khóa" : "Mở khóa"}
+                      </Button>
+                      <Button
+                        size="small"
+                        icon={<ArrowClockwiseRegular />}
+                        disabled={resettingUsername === u.username}
+                        onClick={() => resetPassword(u)}
+                      >
+                        {resettingUsername === u.username ? <Spinner size="tiny" /> : "Đặt lại mật khẩu"}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -171,9 +199,15 @@ export function AdminUsersPage() {
                   <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
                 </Field>
               </div>
-              <Field label="Mật khẩu" required>
-                <Input type="password" value={form.password} onChange={(_, data) => setForm((v) => ({ ...v, password: data.value }))} />
-              </Field>
+              <div className="info-banner">
+                <Badge appearance="tint" color="informative">
+                  Tự động
+                </Badge>
+                <div>
+                  <strong>Mật khẩu sẽ được hệ thống tạo tự động</strong>
+                  <p>Sau khi tạo tài khoản, bạn sẽ nhận được mật khẩu để gửi cho nhân viên đăng nhập lần đầu.</p>
+                </div>
+              </div>
               <div className="form-grid">
                 <Field label="Vai trò" required>
                   <Dropdown
@@ -195,6 +229,48 @@ export function AdminUsersPage() {
               <Button onClick={() => setOpen(false)}>Hủy</Button>
               <Button appearance="primary" onClick={submit} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : "Tạo tài khoản"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <Dialog open={!!credential} onOpenChange={(_, data) => !data.open && setCredential(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{credential?.isReset ? "Đã đặt lại mật khẩu" : "Đã tạo tài khoản"}</DialogTitle>
+            <DialogContent className="form-stack">
+              <p>Gửi thông tin đăng nhập dưới đây cho nhân viên. Mật khẩu chỉ hiển thị một lần.</p>
+              <dl className="detail-list">
+                <div>
+                  <dt>Tên đăng nhập</dt>
+                  <dd>
+                    <strong>{credential?.username}</strong>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Mật khẩu</dt>
+                  <dd className="credential-password-row">
+                    <strong className="credential-password">
+                      {showPassword ? credential?.password : "•".repeat(credential?.password.length ?? 10)}
+                    </strong>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={showPassword ? <EyeOffRegular /> : <EyeRegular />}
+                      aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                      onClick={() => setShowPassword((v) => !v)}
+                    />
+                  </dd>
+                </div>
+              </dl>
+            </DialogContent>
+            <DialogActions>
+              <Button icon={<CopyRegular />} onClick={copyCredential}>
+                Sao chép
+              </Button>
+              <Button appearance="primary" onClick={() => setCredential(null)}>
+                Đã gửi cho nhân viên
               </Button>
             </DialogActions>
           </DialogBody>
