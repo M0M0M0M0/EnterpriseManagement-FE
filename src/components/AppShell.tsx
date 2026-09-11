@@ -20,15 +20,18 @@ import {
   DocumentBulletListRegular,
   HistoryRegular,
   HomeRegular,
+  MoneyRegular,
   NavigationRegular,
   PeopleTeamRegular,
   PersonRegular,
   SettingsRegular,
   ShieldRegular,
   SignOutRegular,
+  SquareRegular,
 } from "@fluentui/react-icons";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { menuApi } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
 import type { UserRole } from "../types/domain";
 import { EmployeeAvatar } from "./ui";
@@ -66,6 +69,26 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/admin/system", label: "System Administration", icon: <SettingsRegular /> },
   ],
 };
+
+// Ánh xạ tên icon lưu trong DB (cột Menu.Icon, ví dụ "HomeRegular") sang component thật.
+// Menu tạo mới qua màn hình Admin nếu dùng tên icon lạ sẽ tự rơi về SquareRegular.
+const iconByName: Record<string, ReactNode> = {
+  HomeRegular: <HomeRegular />,
+  ClockRegular: <ClockRegular />,
+  CalendarRegular: <CalendarRegular />,
+  ChartMultipleRegular: <ChartMultipleRegular />,
+  PeopleTeamRegular: <PeopleTeamRegular />,
+  DocumentBulletListRegular: <DocumentBulletListRegular />,
+  BuildingRegular: <BuildingRegular />,
+  ShieldRegular: <ShieldRegular />,
+  HistoryRegular: <HistoryRegular />,
+  SettingsRegular: <SettingsRegular />,
+  MoneyRegular: <MoneyRegular />,
+};
+
+function resolveIcon(name?: string): ReactNode {
+  return (name && iconByName[name]) || <SquareRegular />;
+}
 
 const roleLabels: Record<UserRole, string> = {
   employee: "Không gian nhân viên",
@@ -110,9 +133,36 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [dynamicNavItems, setDynamicNavItems] = useState<NavItem[] | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    menuApi
+      .getMine()
+      .then((menus) => {
+        if (cancelled) return;
+        const sorted = [...menus].sort((a, b) => a.displayOrder - b.displayOrder);
+        setDynamicNavItems(
+          sorted.map((menu, index) => ({
+            to: menu.route,
+            label: menu.menuName,
+            icon: resolveIcon(menu.icon),
+            end: index === 0,
+          })),
+        );
+      })
+      .catch(() => {
+        // Menu chưa seed được hoặc API lỗi -> giữ nav tĩnh theo role để không bao giờ mất điều hướng.
+        if (!cancelled) setDynamicNavItems(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   if (!role || !session) return null;
-  const navItems = navByRole[role];
+  const navItems = dynamicNavItems && dynamicNavItems.length > 0 ? dynamicNavItems : navByRole[role];
   const title = pageTitleFor(location.pathname, navItems);
 
   const doLogout = () => {

@@ -200,6 +200,7 @@ export const permissionApi = {
 
 export const menuApi = {
   getAll: () => http.get<MenuDto[]>("/menus"),
+  getMine: () => http.get<MenuDto[]>("/menus/mine"),
   create: (request: CreateMenuRequest) => http.post<MenuDto>("/menus", request),
   update: (menuCode: string, request: UpdateMenuRequest) =>
     http.put<MenuDto>(`/menus/${menuCode}`, request),
