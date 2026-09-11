@@ -1,6 +1,7 @@
 import {
   Badge,
   Button,
+  Combobox,
   Dialog,
   DialogActions,
   DialogBody,
@@ -18,7 +19,7 @@ import {
 } from "@fluentui/react-components";
 import { AddRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
-import { EmptyState, PageHeader, SectionPanel } from "../components/ui";
+import { EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
 import {
   customerApi,
@@ -35,6 +36,8 @@ import type {
 } from "../types/domain";
 import { formatCurrency, formatDate } from "../utils/format";
 
+const NO_MANAGER = "__none__";
+
 export function AdminEmployeesPage() {
   const notify = useNotify();
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
@@ -42,7 +45,9 @@ export function AdminEmployeesPage() {
   const [positions, setPositions] = useState<PositionDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<EmployeeDto | null>(null);
   const [sending, setSending] = useState(false);
+  const [managerQuery, setManagerQuery] = useState("");
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -76,22 +81,93 @@ export function AdminEmployeesPage() {
 
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const managerLabel = (e: EmployeeDto) => `${e.fullName} (${e.employeeCode})`;
+
+  const openCreate = () => {
+    setEditing(null);
+    setManagerQuery("");
+    setForm((v) => ({
+      ...v,
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      address: "",
+      dateOfBirth: "",
+      gender: "Male",
+      managerCode: "",
+      hireDate: formatDate(new Date().toISOString(), "yyyy-MM-dd"),
+    }));
+    setOpen(true);
+  };
+
+  const openEdit = (employee: EmployeeDto) => {
+    setEditing(employee);
+    const currentManager = employees.find((e) => e.employeeCode === employee.managerCode);
+    setManagerQuery(currentManager ? managerLabel(currentManager) : "");
+    setForm((v) => ({
+      ...v,
+      phone: employee.phone ?? "",
+      address: employee.address ?? "",
+      departmentCode: employee.departmentCode,
+      positionCode: employee.positionCode,
+      managerCode: employee.managerCode ?? "",
+    }));
+    setOpen(true);
+  };
+
+  const selectDepartment = (departmentCode: string) => {
+    setForm((v) => {
+      const managerStillValid = employees.some(
+        (e) => e.employeeCode === v.managerCode && e.departmentCode === departmentCode,
+      );
+      if (!managerStillValid) setManagerQuery("");
+      return { ...v, departmentCode, managerCode: managerStillValid ? v.managerCode : "" };
+    });
+  };
+
+  const handleManagerSelect = (optionValue: string | undefined) => {
+    if (!optionValue || optionValue === NO_MANAGER) {
+      setForm((v) => ({ ...v, managerCode: "" }));
+      setManagerQuery("");
+      return;
+    }
+    const emp = employees.find((e) => e.employeeCode === optionValue);
+    setForm((v) => ({ ...v, managerCode: optionValue }));
+    setManagerQuery(emp ? managerLabel(emp) : "");
+  };
+
   const submit = async () => {
-    if (!form.firstName.trim() || !form.lastName.trim() || !form.departmentCode || !form.positionCode) {
-      notify({ ok: false, message: "Vui lòng nhập đủ họ tên, phòng ban, chức vụ." });
+    if (!form.departmentCode || !form.positionCode) {
+      notify({ ok: false, message: "Vui lòng chọn phòng ban và chức vụ." });
+      return;
+    }
+    if (!editing && (!form.firstName.trim() || !form.lastName.trim())) {
+      notify({ ok: false, message: "Vui lòng nhập đủ họ tên." });
       return;
     }
     setSending(true);
     try {
-      await employeeApi.create({
-        ...form,
-        email: form.email || undefined,
-        phone: form.phone || undefined,
-        address: form.address || undefined,
-        dateOfBirth: form.dateOfBirth || undefined,
-        managerCode: form.managerCode || undefined,
-      });
-      notify({ ok: true, message: "Đã thêm nhân viên mới." });
+      if (editing) {
+        await employeeApi.update(editing.employeeCode, {
+          phone: form.phone || undefined,
+          address: form.address || undefined,
+          departmentCode: form.departmentCode,
+          positionCode: form.positionCode,
+          managerCode: form.managerCode || undefined,
+        });
+        notify({ ok: true, message: "Đã cập nhật hồ sơ nhân viên." });
+      } else {
+        await employeeApi.create({
+          ...form,
+          email: form.email || undefined,
+          phone: form.phone || undefined,
+          address: form.address || undefined,
+          dateOfBirth: form.dateOfBirth || undefined,
+          managerCode: form.managerCode || undefined,
+        });
+        notify({ ok: true, message: "Đã thêm nhân viên mới." });
+      }
       setOpen(false);
       load();
     } catch (err) {
@@ -111,13 +187,36 @@ export function AdminEmployeesPage() {
     }
   };
 
+  // Ứng viên quản lý: cùng phòng ban đã chọn, chưa nghỉ việc, không phải chính mình.
+  // Vẫn giữ quản lý hiện tại của hồ sơ (nếu có) trong danh sách dù người đó khác phòng ban,
+  // để mở form Sửa không làm mất lựa chọn đang có sẵn.
+  const departmentManagerCandidates = employees.filter(
+    (e) =>
+      e.departmentCode === form.departmentCode &&
+      e.employmentStatus !== "Terminated" &&
+      e.employeeCode !== editing?.employeeCode,
+  );
+  const currentManager = editing?.managerCode
+    ? employees.find((e) => e.employeeCode === editing.managerCode)
+    : undefined;
+  const managerCandidates =
+    currentManager && !departmentManagerCandidates.some((e) => e.employeeCode === currentManager.employeeCode)
+      ? [currentManager, ...departmentManagerCandidates]
+      : departmentManagerCandidates;
+  const managerSearch = managerQuery.trim().toLowerCase();
+  const filteredManagerCandidates = managerSearch
+    ? managerCandidates.filter(
+        (e) => e.fullName.toLowerCase().includes(managerSearch) || e.employeeCode.toLowerCase().includes(managerSearch),
+      )
+    : managerCandidates;
+
   return (
     <div className="page-stack">
       <PageHeader
         title="Quản lý nhân viên"
-        description="Tạo nhân viên mới, khóa/mở tài khoản làm việc."
+        description="Tạo nhân viên mới, sửa phòng ban/chức vụ/quản lý, khóa/mở tài khoản làm việc."
         action={
-          <Button appearance="primary" icon={<AddRegular />} onClick={() => setOpen(true)}>
+          <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
             Thêm nhân viên
           </Button>
         }
@@ -145,16 +244,21 @@ export function AdminEmployeesPage() {
                   <td>{e.fullName}</td>
                   <td>{e.departmentName}</td>
                   <td>{e.positionName}</td>
-                  <td>{e.managerCode ?? "--"}</td>
+                  <td>{employees.find((m) => m.employeeCode === e.managerCode)?.fullName ?? e.managerCode ?? "--"}</td>
                   <td>
                     <Badge appearance="tint" color={e.employmentStatus === "Active" ? "success" : "subtle"}>
                       {e.employmentStatus}
                     </Badge>
                   </td>
                   <td>
-                    <Button size="small" onClick={() => toggleActive(e)}>
-                      {e.employmentStatus === "Active" ? "Khóa" : "Mở khóa"}
-                    </Button>
+                    <div className="row-actions">
+                      <Button size="small" onClick={() => openEdit(e)}>
+                        Sửa
+                      </Button>
+                      <Button size="small" onClick={() => toggleActive(e)}>
+                        {e.employmentStatus === "Active" ? "Khóa" : "Mở khóa"}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -168,49 +272,55 @@ export function AdminEmployeesPage() {
       <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Thêm nhân viên mới</DialogTitle>
+            <DialogTitle>{editing ? `Sửa hồ sơ: ${editing.fullName}` : "Thêm nhân viên mới"}</DialogTitle>
             <DialogContent className="form-stack">
+              {!editing ? (
+                <>
+                  <div className="form-grid">
+                    <Field label="Họ" required>
+                      <Input value={form.lastName} onChange={(_, data) => setForm((v) => ({ ...v, lastName: data.value }))} />
+                    </Field>
+                    <Field label="Tên" required>
+                      <Input value={form.firstName} onChange={(_, data) => setForm((v) => ({ ...v, firstName: data.value }))} />
+                    </Field>
+                  </div>
+                  <Field label="Email">
+                    <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
+                  </Field>
+                </>
+              ) : null}
               <div className="form-grid">
-                <Field label="Họ" required>
-                  <Input value={form.lastName} onChange={(_, data) => setForm((v) => ({ ...v, lastName: data.value }))} />
-                </Field>
-                <Field label="Tên" required>
-                  <Input value={form.firstName} onChange={(_, data) => setForm((v) => ({ ...v, firstName: data.value }))} />
-                </Field>
-              </div>
-              <div className="form-grid">
-                <Field label="Email">
-                  <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
-                </Field>
                 <Field label="Điện thoại">
                   <Input value={form.phone} onChange={(_, data) => setForm((v) => ({ ...v, phone: data.value }))} />
                 </Field>
-              </div>
-              <Field label="Địa chỉ">
-                <Input value={form.address} onChange={(_, data) => setForm((v) => ({ ...v, address: data.value }))} />
-              </Field>
-              <div className="form-grid">
-                <Field label="Ngày sinh">
-                  <Input type="date" value={form.dateOfBirth} onChange={(_, data) => setForm((v) => ({ ...v, dateOfBirth: data.value }))} />
-                </Field>
-                <Field label="Giới tính">
-                  <Dropdown
-                    value={form.gender}
-                    selectedOptions={[form.gender]}
-                    onOptionSelect={(_, data) => setForm((v) => ({ ...v, gender: data.optionValue ?? "Male" }))}
-                  >
-                    <Option value="Male">Nam</Option>
-                    <Option value="Female">Nữ</Option>
-                    <Option value="Other">Khác</Option>
-                  </Dropdown>
+                <Field label="Địa chỉ">
+                  <Input value={form.address} onChange={(_, data) => setForm((v) => ({ ...v, address: data.value }))} />
                 </Field>
               </div>
+              {!editing ? (
+                <div className="form-grid">
+                  <Field label="Ngày sinh">
+                    <Input type="date" value={form.dateOfBirth} onChange={(_, data) => setForm((v) => ({ ...v, dateOfBirth: data.value }))} />
+                  </Field>
+                  <Field label="Giới tính">
+                    <Dropdown
+                      value={form.gender}
+                      selectedOptions={[form.gender]}
+                      onOptionSelect={(_, data) => setForm((v) => ({ ...v, gender: data.optionValue ?? "Male" }))}
+                    >
+                      <Option value="Male">Nam</Option>
+                      <Option value="Female">Nữ</Option>
+                      <Option value="Other">Khác</Option>
+                    </Dropdown>
+                  </Field>
+                </div>
+              ) : null}
               <div className="form-grid">
                 <Field label="Phòng ban" required>
                   <Dropdown
                     value={departments.find((d) => d.departmentCode === form.departmentCode)?.departmentName ?? ""}
                     selectedOptions={[form.departmentCode]}
-                    onOptionSelect={(_, data) => setForm((v) => ({ ...v, departmentCode: data.optionValue ?? "" }))}
+                    onOptionSelect={(_, data) => selectDepartment(data.optionValue ?? "")}
                   >
                     {departments.map((d) => (
                       <Option key={d.departmentCode} value={d.departmentCode}>
@@ -234,18 +344,39 @@ export function AdminEmployeesPage() {
                 </Field>
               </div>
               <div className="form-grid">
-                <Field label="Mã quản lý trực tiếp (nếu có)">
-                  <Input value={form.managerCode} onChange={(_, data) => setForm((v) => ({ ...v, managerCode: data.value }))} />
+                <Field label="Quản lý trực tiếp">
+                  <Combobox
+                    value={managerQuery}
+                    selectedOptions={[form.managerCode || NO_MANAGER]}
+                    placeholder={form.departmentCode ? "Gõ tên hoặc mã nhân viên để tìm..." : "Chọn phòng ban trước"}
+                    disabled={!form.departmentCode}
+                    onChange={(event) => setManagerQuery(event.target.value)}
+                    onOptionSelect={(_, data) => handleManagerSelect(data.optionValue)}
+                  >
+                    <Option value={NO_MANAGER} text="Không có">
+                      Không có
+                    </Option>
+                    {filteredManagerCandidates.map((m) => (
+                      <Option key={m.employeeCode} value={m.employeeCode} text={managerLabel(m)}>
+                        {managerLabel(m)}
+                      </Option>
+                    ))}
+                  </Combobox>
+                  {form.departmentCode && managerCandidates.length === 0 ? (
+                    <FieldError message="Phòng ban này chưa có nhân viên nào khác để chọn làm quản lý." />
+                  ) : null}
                 </Field>
-                <Field label="Ngày vào làm" required>
-                  <Input type="date" value={form.hireDate} onChange={(_, data) => setForm((v) => ({ ...v, hireDate: data.value }))} />
-                </Field>
+                {!editing ? (
+                  <Field label="Ngày vào làm" required>
+                    <Input type="date" value={form.hireDate} onChange={(_, data) => setForm((v) => ({ ...v, hireDate: data.value }))} />
+                  </Field>
+                ) : null}
               </div>
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setOpen(false)}>Hủy</Button>
               <Button appearance="primary" onClick={submit} disabled={sending}>
-                {sending ? <Spinner size="tiny" /> : "Thêm nhân viên"}
+                {sending ? <Spinner size="tiny" /> : editing ? "Lưu thay đổi" : "Thêm nhân viên"}
               </Button>
             </DialogActions>
           </DialogBody>
