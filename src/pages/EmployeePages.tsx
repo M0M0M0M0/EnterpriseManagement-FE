@@ -52,10 +52,19 @@ import type {
   EmployeeDashboardDto,
   LeaveBalanceDto,
   LeaveRequestDto,
+  LeaveSession,
   LeaveTypeDto,
   SaleDto,
 } from "../types/domain";
-import { formatCurrency, formatDate, formatDateTime } from "../utils/format";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatLeaveTime,
+  formatTime,
+  isoDate,
+  leaveSessionLabels,
+} from "../utils/format";
 
 function useEmployeeCode() {
   return useAuthStore((state) => state.session?.employeeCode);
@@ -358,8 +367,11 @@ export function EmployeeLeavePage() {
   const employeeCode = useEmployeeCode();
   const [form, setForm] = useState({
     leaveTypeCode: "",
-    startDate: "",
-    endDate: "",
+    startDate: isoDate(),
+    endDate: isoDate(),
+    session: "FullDay" as LeaveSession,
+    shortStart: "",
+    shortEnd: "",
     reason: "",
   });
 
@@ -383,17 +395,45 @@ export function EmployeeLeavePage() {
 
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const selectedType = leaveTypes.find((t) => t.leaveTypeCode === form.leaveTypeCode);
+  const isShortLeave = selectedType?.accrualPeriod === "MonthlyReset";
+  const isMultiDay = form.startDate !== form.endDate;
+
   const submit = async () => {
-    if (!form.leaveTypeCode || !form.startDate || !form.endDate) {
-      notify({ ok: false, message: "Vui lòng nhập đầy đủ thông tin đơn nghỉ." });
+    if (!form.leaveTypeCode) {
+      notify({ ok: false, message: "Vui lòng chọn loại nghỉ." });
+      return;
+    }
+    if (isShortLeave) {
+      if (!form.shortStart || !form.shortEnd) {
+        notify({ ok: false, message: "Vui lòng chọn giờ bắt đầu và kết thúc." });
+        return;
+      }
+    } else if (!form.startDate || !form.endDate) {
+      notify({ ok: false, message: "Vui lòng nhập đầy đủ ngày nghỉ." });
       return;
     }
     setSending(true);
     try {
-      await leaveRequestApi.submit(form);
+      if (isShortLeave) {
+        await leaveRequestApi.submit({
+          leaveTypeCode: form.leaveTypeCode,
+          startDate: form.shortStart,
+          endDate: form.shortEnd,
+          reason: form.reason,
+        });
+      } else {
+        await leaveRequestApi.submit({
+          leaveTypeCode: form.leaveTypeCode,
+          startDate: `${form.startDate}T00:00:00`,
+          endDate: `${form.endDate}T00:00:00`,
+          session: isMultiDay ? "FullDay" : form.session,
+          reason: form.reason,
+        });
+      }
       notify({ ok: true, message: "Đơn nghỉ phép đã được gửi." });
       setOpen(false);
-      setForm((v) => ({ ...v, startDate: "", endDate: "", reason: "" }));
+      setForm((v) => ({ ...v, shortStart: "", shortEnd: "", reason: "" }));
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -412,14 +452,15 @@ export function EmployeeLeavePage() {
     }
   };
 
-  const totalRemaining = balances.reduce((sum, b) => sum + b.remainingDays, 0);
+  const remainingDays = balances.filter((b) => b.unit === "Days").reduce((sum, b) => sum + b.remainingTime, 0);
+  const shortLeaveBalance = balances.find((b) => b.unit === "Hours");
   const pending = requests.filter((r) => r.status === "Pending").length;
 
   return (
     <div className="page-stack">
       <PageHeader
         title="Xin nghỉ phép"
-        description="Tạo đơn nghỉ, theo dõi trạng thái và số ngày phép còn lại."
+        description="Tạo đơn nghỉ, theo dõi trạng thái và số dư còn lại."
         action={
           <Button appearance="primary" icon={<AddRegular />} onClick={() => setOpen(true)}>
             Tạo đơn
@@ -432,7 +473,14 @@ export function EmployeeLeavePage() {
         <>
           <MetricRail
             items={[
-              { label: "Phép còn lại", value: `${totalRemaining} ngày`, tone: "brand" },
+              { label: "Ngày phép còn lại", value: `${remainingDays} ngày`, tone: "brand" },
+              shortLeaveBalance
+                ? {
+                    label: "Nghỉ ngắn tháng này",
+                    value: formatLeaveTime(shortLeaveBalance.remainingTime, shortLeaveBalance.unit),
+                    tone: "brand",
+                  }
+                : { label: "Nghỉ ngắn tháng này", value: "--", tone: "brand" },
               { label: "Đang chờ duyệt", value: pending, tone: pending ? "warning" : "success" },
             ]}
           />
@@ -447,7 +495,11 @@ export function EmployeeLeavePage() {
                     <div className="request-main">
                       <strong>{item.leaveTypeName}</strong>
                       <span>
-                        {formatDate(item.startDate)} - {formatDate(item.endDate)} · {item.totalDays} ngày
+                        {item.unit === "Hours"
+                          ? `${formatDate(item.startDate)}, ${formatTime(item.startDate)} - ${formatTime(item.endDate)}`
+                          : `${formatDate(item.startDate)} - ${formatDate(item.endDate)}${item.session ? ` · ${leaveSessionLabels[item.session]}` : ""}`}
+                        {" · "}
+                        {formatLeaveTime(item.totalTime, item.unit)}
                       </span>
                       <p>{item.reason}</p>
                       {item.rejectionReason ? <small>Lý do từ chối: {item.rejectionReason}</small> : null}
@@ -476,13 +528,13 @@ export function EmployeeLeavePage() {
             {balances.length ? (
               <div className="compact-list">
                 {balances.map((balance) => (
-                  <div className="compact-row" key={balance.leaveTypeCode}>
+                  <div className="compact-row" key={`${balance.leaveTypeCode}-${balance.month ?? "y"}`}>
                     <div>
                       <strong>{balance.leaveTypeName}</strong>
-                      <span>Năm {balance.year}</span>
+                      <span>{balance.month ? `Tháng ${balance.month}/${balance.year}` : `Năm ${balance.year}`}</span>
                     </div>
                     <strong>
-                      {balance.remainingDays}/{balance.allocatedDays} ngày
+                      {formatLeaveTime(balance.remainingTime, balance.unit)} / {formatLeaveTime(balance.allocatedTime, balance.unit)}
                     </strong>
                   </div>
                 ))}
@@ -501,7 +553,7 @@ export function EmployeeLeavePage() {
             <DialogContent className="form-stack">
               <Field label="Loại nghỉ" required>
                 <Dropdown
-                  value={leaveTypes.find((t) => t.leaveTypeCode === form.leaveTypeCode)?.leaveTypeName ?? ""}
+                  value={selectedType?.leaveTypeName ?? ""}
                   selectedOptions={[form.leaveTypeCode]}
                   onOptionSelect={(_, data) =>
                     setForm((v) => ({ ...v, leaveTypeCode: data.optionValue ?? "" }))
@@ -515,22 +567,60 @@ export function EmployeeLeavePage() {
                 </Dropdown>
                 {!leaveTypes.length ? <FieldError message="Chưa có loại nghỉ nào được cấu hình." /> : null}
               </Field>
-              <div className="form-grid">
-                <Field label="Từ ngày" required>
-                  <Input
-                    type="date"
-                    value={form.startDate}
-                    onChange={(_, data) => setForm((v) => ({ ...v, startDate: data.value }))}
-                  />
-                </Field>
-                <Field label="Đến ngày" required>
-                  <Input
-                    type="date"
-                    value={form.endDate}
-                    onChange={(_, data) => setForm((v) => ({ ...v, endDate: data.value }))}
-                  />
-                </Field>
-              </div>
+
+              {isShortLeave ? (
+                <div className="form-grid">
+                  <Field label="Từ giờ" required>
+                    <Input
+                      type="datetime-local"
+                      value={form.shortStart}
+                      onChange={(_, data) => setForm((v) => ({ ...v, shortStart: data.value }))}
+                    />
+                  </Field>
+                  <Field label="Đến giờ" required>
+                    <Input
+                      type="datetime-local"
+                      value={form.shortEnd}
+                      onChange={(_, data) => setForm((v) => ({ ...v, shortEnd: data.value }))}
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <>
+                  <div className="form-grid">
+                    <Field label="Từ ngày" required>
+                      <Input
+                        type="date"
+                        value={form.startDate}
+                        onChange={(_, data) => setForm((v) => ({ ...v, startDate: data.value }))}
+                      />
+                    </Field>
+                    <Field label="Đến ngày" required>
+                      <Input
+                        type="date"
+                        value={form.endDate}
+                        onChange={(_, data) => setForm((v) => ({ ...v, endDate: data.value }))}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Buổi nghỉ" required>
+                    <Dropdown
+                      value={isMultiDay ? leaveSessionLabels.FullDay : leaveSessionLabels[form.session]}
+                      selectedOptions={[isMultiDay ? "FullDay" : form.session]}
+                      disabled={isMultiDay}
+                      onOptionSelect={(_, data) =>
+                        setForm((v) => ({ ...v, session: (data.optionValue as LeaveSession) ?? "FullDay" }))
+                      }
+                    >
+                      <Option value="Morning">{leaveSessionLabels.Morning}</Option>
+                      <Option value="Afternoon">{leaveSessionLabels.Afternoon}</Option>
+                      <Option value="FullDay">{leaveSessionLabels.FullDay}</Option>
+                    </Dropdown>
+                    {isMultiDay ? <FieldError message="Nghỉ nhiều ngày chỉ có thể chọn Cả ngày." /> : null}
+                  </Field>
+                </>
+              )}
+
               <Field label="Lý do">
                 <Textarea
                   resize="vertical"

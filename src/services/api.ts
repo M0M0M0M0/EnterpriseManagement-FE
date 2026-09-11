@@ -121,17 +121,19 @@ export const leaveTypeApi = {
 export const leaveBalanceApi = {
   getByEmployee: (employeeCode: string, year: number) =>
     http.get<LeaveBalanceDto[]>(`/leave-balances/${employeeCode}?year=${year}`),
-  setAllocatedDays: (
+  setAllocatedTime: (
     employeeCode: string,
     leaveTypeCode: string,
     year: number,
-    allocatedDays: number,
+    allocatedTime: number,
+    month?: number,
   ) =>
     http.put<LeaveBalanceDto>("/leave-balances", {
       employeeCode,
       leaveTypeCode,
       year,
-      allocatedDays,
+      month,
+      allocatedTime,
     }),
 };
 

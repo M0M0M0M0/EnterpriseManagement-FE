@@ -71,3 +71,18 @@ export function formatNumber(value: number) {
     value,
   );
 }
+
+export const leaveUnitLabels: Record<string, string> = {
+  Days: "ngày",
+  Hours: "giờ",
+};
+
+export function formatLeaveTime(value: number, unit: string) {
+  return `${formatNumber(value)} ${leaveUnitLabels[unit] ?? unit}`;
+}
+
+export const leaveSessionLabels: Record<string, string> = {
+  Morning: "Buổi sáng (08:00-12:00)",
+  Afternoon: "Buổi chiều (13:00-17:00)",
+  FullDay: "Cả ngày",
+};

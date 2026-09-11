@@ -46,7 +46,15 @@ import type {
   PositionDto,
   SaleDto,
 } from "../types/domain";
-import { formatCurrency, formatDate, formatDateTime, isoDate } from "../utils/format";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatLeaveTime,
+  formatTime,
+  isoDate,
+  leaveSessionLabels,
+} from "../utils/format";
 
 function useManagerCode() {
   return useAuthStore((state) => state.session?.employeeCode);
@@ -398,7 +406,12 @@ export function ManagerLeavePage() {
               <div>
                 <strong>{item.employeeName}</strong>
                 <span>
-                  {item.leaveTypeName} · {formatDate(item.startDate)} - {formatDate(item.endDate)} · {item.totalDays} ngày
+                  {item.leaveTypeName} ·{" "}
+                  {item.unit === "Hours"
+                    ? `${formatDate(item.startDate)}, ${formatTime(item.startDate)} - ${formatTime(item.endDate)}`
+                    : `${formatDate(item.startDate)} - ${formatDate(item.endDate)}${item.session ? ` · ${leaveSessionLabels[item.session]}` : ""}`}
+                  {" · "}
+                  {formatLeaveTime(item.totalTime, item.unit)}
                 </span>
                 <p>{item.reason}</p>
               </div>

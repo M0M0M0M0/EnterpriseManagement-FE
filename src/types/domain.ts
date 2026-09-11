@@ -129,10 +129,16 @@ export interface SubmitAdjustmentRequest {
   newCheckOutTime?: string;
 }
 
+export type LeaveUnit = "Days" | "Hours";
+export type LeaveAccrualPeriod = "ProratedYearly" | "MonthlyReset" | "FlatYearly";
+export type LeaveSession = "Morning" | "Afternoon" | "FullDay";
+
 export interface LeaveTypeDto {
   leaveTypeCode: string;
   leaveTypeName: string;
-  defaultDays?: number;
+  accrualAmount: number;
+  accrualUnit: LeaveUnit;
+  accrualPeriod: LeaveAccrualPeriod;
   isPaid: boolean;
   description?: string;
   isActive: boolean;
@@ -142,9 +148,11 @@ export interface LeaveBalanceDto {
   leaveTypeCode: string;
   leaveTypeName: string;
   year: number;
-  allocatedDays: number;
-  usedDays: number;
-  remainingDays: number;
+  month?: number;
+  unit: LeaveUnit;
+  allocatedTime: number;
+  usedTime: number;
+  remainingTime: number;
 }
 
 export interface LeaveRequestDto {
@@ -155,7 +163,9 @@ export interface LeaveRequestDto {
   leaveTypeName: string;
   startDate: string;
   endDate: string;
-  totalDays: number;
+  session?: LeaveSession;
+  unit: LeaveUnit;
+  totalTime: number;
   reason?: string;
   status: string;
   approverName?: string;
@@ -167,6 +177,7 @@ export interface SubmitLeaveRequest {
   leaveTypeCode: string;
   startDate: string;
   endDate: string;
+  session?: LeaveSession;
   reason?: string;
 }
 
