@@ -20,7 +20,6 @@ import {
   DocumentBulletListRegular,
   HistoryRegular,
   HomeRegular,
-  MoneyRegular,
   NavigationRegular,
   PeopleTeamRegular,
   PersonRegular,
@@ -63,8 +62,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/admin/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
     { to: "/admin/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
     { to: "/admin/customers", label: "Quản lý khách hàng", icon: <PeopleTeamRegular /> },
-    { to: "/admin/payroll", label: "Bảng lương", icon: <MoneyRegular /> },
-    { to: "/admin/audit-log", label: "Audit Log", icon: <HistoryRegular /> },
+    { to: "/admin/audit", label: "Audit Log", icon: <HistoryRegular /> },
     { to: "/admin/system", label: "System Administration", icon: <SettingsRegular /> },
   ],
 };
