@@ -116,13 +116,47 @@ export function AdminEmployeesPage() {
     setOpen(true);
   };
 
+  const positionByCode = new Map(positions.map((p) => [p.positionCode, p]));
+
+  // Gợi ý quản lý trực tiếp mặc định: tìm bậc liền trên (rankLevel nhỏ hơn, gần nhất)
+  // trong cùng phòng ban. Chỉ tự điền khi bậc đó có đúng 1 người, để tránh chọn nhầm.
+  // Trưởng phòng (bậc cao nhất, không có bậc nào nhỏ hơn) thì không gợi ý gì.
+  const suggestManagerFor = (departmentCode: string, positionCode: string) => {
+    const rank = positionByCode.get(positionCode)?.rankLevel;
+    if (rank === undefined) return undefined;
+    const isTop = !positions.some((p) => p.rankLevel < rank);
+    if (isTop) return undefined;
+    const higherRanks = positions.map((p) => p.rankLevel).filter((r) => r < rank);
+    if (!higherRanks.length) return undefined;
+    const nextRank = Math.max(...higherRanks);
+    const candidates = employees.filter(
+      (e) =>
+        e.departmentCode === departmentCode &&
+        e.employmentStatus !== "Terminated" &&
+        positionByCode.get(e.positionCode)?.rankLevel === nextRank,
+    );
+    return candidates.length === 1 ? candidates[0] : undefined;
+  };
+
   const selectDepartment = (departmentCode: string) => {
     setForm((v) => {
       const managerStillValid = employees.some(
         (e) => e.employeeCode === v.managerCode && e.departmentCode === departmentCode,
       );
-      if (!managerStillValid) setManagerQuery("");
-      return { ...v, departmentCode, managerCode: managerStillValid ? v.managerCode : "" };
+      if (managerStillValid) return { ...v, departmentCode };
+      const suggestion = suggestManagerFor(departmentCode, v.positionCode);
+      setManagerQuery(suggestion ? managerLabel(suggestion) : "");
+      return { ...v, departmentCode, managerCode: suggestion?.employeeCode ?? "" };
+    });
+  };
+
+  const selectPosition = (positionCode: string) => {
+    setForm((v) => {
+      if (v.managerCode) return { ...v, positionCode };
+      const suggestion = suggestManagerFor(v.departmentCode, positionCode);
+      if (!suggestion) return { ...v, positionCode };
+      setManagerQuery(managerLabel(suggestion));
+      return { ...v, positionCode, managerCode: suggestion.employeeCode };
     });
   };
 
@@ -188,22 +222,36 @@ export function AdminEmployeesPage() {
   };
 
   // Ứng viên quản lý: cùng phòng ban đã chọn, chưa nghỉ việc, không phải chính mình.
-  // Vẫn giữ quản lý hiện tại của hồ sơ (nếu có) trong danh sách dù người đó khác phòng ban,
-  // để mở form Sửa không làm mất lựa chọn đang có sẵn.
   const departmentManagerCandidates = employees.filter(
     (e) =>
       e.departmentCode === form.departmentCode &&
       e.employmentStatus !== "Terminated" &&
       e.employeeCode !== editing?.employeeCode,
   );
+  // Khi chưa gõ tìm kiếm, chỉ gợi ý người ở bậc liền trên (vd Nhân viên -> chỉ thấy Quản lý,
+  // không thấy Trưởng/Phó phòng). Trưởng phòng (bậc cao nhất) thì không gợi ý ai.
+  // Gõ tìm kiếm sẽ mở rộng ra xem được tất cả các bậc trong phòng ban.
+  const selectedRank = positionByCode.get(form.positionCode)?.rankLevel;
+  const isTopRank = selectedRank !== undefined && !positions.some((p) => p.rankLevel < selectedRank);
+  const higherRanks = selectedRank !== undefined ? positions.map((p) => p.rankLevel).filter((r) => r < selectedRank) : [];
+  const nextHigherRank = higherRanks.length ? Math.max(...higherRanks) : undefined;
+  const tierCandidates =
+    nextHigherRank !== undefined
+      ? departmentManagerCandidates.filter((e) => positionByCode.get(e.positionCode)?.rankLevel === nextHigherRank)
+      : [];
+  const defaultManagerCandidates = isTopRank ? [] : tierCandidates.length ? tierCandidates : departmentManagerCandidates;
+
+  // Vẫn giữ quản lý hiện tại của hồ sơ (nếu có) trong danh sách hiển thị, dù người đó
+  // khác bậc hoặc khác phòng ban, để mở form Sửa không làm mất lựa chọn đang có sẵn.
   const currentManager = editing?.managerCode
     ? employees.find((e) => e.employeeCode === editing.managerCode)
     : undefined;
-  const managerCandidates =
-    currentManager && !departmentManagerCandidates.some((e) => e.employeeCode === currentManager.employeeCode)
-      ? [currentManager, ...departmentManagerCandidates]
-      : departmentManagerCandidates;
   const managerSearch = managerQuery.trim().toLowerCase();
+  const visibleCandidates = managerSearch ? departmentManagerCandidates : defaultManagerCandidates;
+  const managerCandidates =
+    currentManager && !visibleCandidates.some((e) => e.employeeCode === currentManager.employeeCode)
+      ? [currentManager, ...visibleCandidates]
+      : visibleCandidates;
   const filteredManagerCandidates = managerSearch
     ? managerCandidates.filter(
         (e) => e.fullName.toLowerCase().includes(managerSearch) || e.employeeCode.toLowerCase().includes(managerSearch),
@@ -333,7 +381,7 @@ export function AdminEmployeesPage() {
                   <Dropdown
                     value={positions.find((p) => p.positionCode === form.positionCode)?.positionName ?? ""}
                     selectedOptions={[form.positionCode]}
-                    onOptionSelect={(_, data) => setForm((v) => ({ ...v, positionCode: data.optionValue ?? "" }))}
+                    onOptionSelect={(_, data) => selectPosition(data.optionValue ?? "")}
                   >
                     {positions.map((p) => (
                       <Option key={p.positionCode} value={p.positionCode}>
@@ -344,7 +392,14 @@ export function AdminEmployeesPage() {
                 </Field>
               </div>
               <div className="form-grid">
-                <Field label="Quản lý trực tiếp">
+                <Field
+                  label="Quản lý trực tiếp"
+                  hint={
+                    form.departmentCode && departmentManagerCandidates.length > 0 && !managerSearch && !isTopRank && !tierCandidates.length
+                      ? "Chưa có ai ở bậc liền trên trong phòng ban này, gõ để tìm người khác."
+                      : undefined
+                  }
+                >
                   <Combobox
                     value={managerQuery}
                     selectedOptions={[form.managerCode || NO_MANAGER]}
@@ -362,7 +417,7 @@ export function AdminEmployeesPage() {
                       </Option>
                     ))}
                   </Combobox>
-                  {form.departmentCode && managerCandidates.length === 0 ? (
+                  {form.departmentCode && departmentManagerCandidates.length === 0 ? (
                     <FieldError message="Phòng ban này chưa có nhân viên nào khác để chọn làm quản lý." />
                   ) : null}
                 </Field>
@@ -394,8 +449,9 @@ export function AdminOrganizationPage() {
   const [loading, setLoading] = useState(true);
   const [deptOpen, setDeptOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<PositionDto | null>(null);
   const [deptForm, setDeptForm] = useState({ departmentCode: "", departmentName: "", description: "" });
-  const [posForm, setPosForm] = useState({ positionCode: "", positionName: "", description: "" });
+  const [posForm, setPosForm] = useState({ positionCode: "", positionName: "", description: "", rankLevel: "50" });
 
   const load = () => {
     setLoading(true);
@@ -436,16 +492,48 @@ export function AdminOrganizationPage() {
     }
   };
 
-  const createPosition = async () => {
+  const openCreatePosition = () => {
+    setEditingPosition(null);
+    setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50" });
+    setPosOpen(true);
+  };
+
+  const openEditPosition = (p: PositionDto) => {
+    setEditingPosition(p);
+    setPosForm({
+      positionCode: p.positionCode,
+      positionName: p.positionName,
+      description: p.description ?? "",
+      rankLevel: String(p.rankLevel),
+    });
+    setPosOpen(true);
+  };
+
+  const submitPosition = async () => {
     if (!posForm.positionCode.trim() || !posForm.positionName.trim()) {
       notify({ ok: false, message: "Vui lòng nhập mã và tên chức vụ." });
       return;
     }
+    const rankLevel = Number(posForm.rankLevel);
+    if (!Number.isFinite(rankLevel)) {
+      notify({ ok: false, message: "Cấp bậc phải là một số." });
+      return;
+    }
     try {
-      await positionApi.create(posForm);
-      notify({ ok: true, message: "Đã thêm chức vụ." });
+      if (editingPosition) {
+        await positionApi.update(editingPosition.positionCode, {
+          positionName: posForm.positionName,
+          description: posForm.description,
+          rankLevel,
+        });
+        notify({ ok: true, message: "Đã cập nhật chức vụ." });
+      } else {
+        await positionApi.create({ ...posForm, rankLevel });
+        notify({ ok: true, message: "Đã thêm chức vụ." });
+      }
       setPosOpen(false);
-      setPosForm({ positionCode: "", positionName: "", description: "" });
+      setEditingPosition(null);
+      setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50" });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -508,7 +596,7 @@ export function AdminOrganizationPage() {
         <SectionPanel
           title="Danh sách chức vụ"
           action={
-            <Button appearance="primary" icon={<AddRegular />} onClick={() => setPosOpen(true)}>
+            <Button appearance="primary" icon={<AddRegular />} onClick={openCreatePosition}>
               Thêm chức vụ
             </Button>
           }
@@ -518,12 +606,17 @@ export function AdminOrganizationPage() {
               <div className="compact-row" key={p.positionCode}>
                 <div>
                   <strong>{p.positionName}</strong>
-                  <span>{p.positionCode} · {p.standardSalary ? formatCurrency(p.standardSalary) : "Chưa có lương chuẩn"}</span>
+                  <span>
+                    {p.positionCode} · Cấp {p.rankLevel} · {p.standardSalary ? formatCurrency(p.standardSalary) : "Chưa có lương chuẩn"}
+                  </span>
                 </div>
                 <div className="row-actions">
                   <Badge appearance="tint" color={p.isActive ? "success" : "subtle"}>
                     {p.isActive ? "Hoạt động" : "Ngừng"}
                   </Badge>
+                  <Button size="small" onClick={() => openEditPosition(p)}>
+                    Sửa
+                  </Button>
                   <Button size="small" onClick={() => togglePosition(p)}>
                     {p.isActive ? "Khóa" : "Mở khóa"}
                   </Button>
@@ -559,16 +652,33 @@ export function AdminOrganizationPage() {
         </DialogSurface>
       </Dialog>
 
-      <Dialog open={posOpen} onOpenChange={(_, data) => setPosOpen(data.open)}>
+      <Dialog
+        open={posOpen}
+        onOpenChange={(_, data) => {
+          setPosOpen(data.open);
+          if (!data.open) setEditingPosition(null);
+        }}
+      >
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Thêm chức vụ</DialogTitle>
+            <DialogTitle>{editingPosition ? "Sửa chức vụ" : "Thêm chức vụ"}</DialogTitle>
             <DialogContent className="form-stack">
               <Field label="Mã chức vụ" required>
-                <Input value={posForm.positionCode} onChange={(_, data) => setPosForm((v) => ({ ...v, positionCode: data.value }))} />
+                <Input
+                  value={posForm.positionCode}
+                  disabled={!!editingPosition}
+                  onChange={(_, data) => setPosForm((v) => ({ ...v, positionCode: data.value }))}
+                />
               </Field>
               <Field label="Tên chức vụ" required>
                 <Input value={posForm.positionName} onChange={(_, data) => setPosForm((v) => ({ ...v, positionName: data.value }))} />
+              </Field>
+              <Field label="Cấp bậc" hint="Số càng nhỏ càng cao cấp. Để hở khoảng cách (vd 10, 20, 30) để dễ chèn thêm chức vụ mới ở giữa.">
+                <Input
+                  type="number"
+                  value={posForm.rankLevel}
+                  onChange={(_, data) => setPosForm((v) => ({ ...v, rankLevel: data.value }))}
+                />
               </Field>
               <Field label="Mô tả">
                 <Textarea resize="vertical" value={posForm.description} onChange={(_, data) => setPosForm((v) => ({ ...v, description: data.value }))} />
@@ -576,8 +686,8 @@ export function AdminOrganizationPage() {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setPosOpen(false)}>Hủy</Button>
-              <Button appearance="primary" onClick={createPosition}>
-                Thêm mới
+              <Button appearance="primary" onClick={submitPosition}>
+                {editingPosition ? "Lưu thay đổi" : "Thêm mới"}
               </Button>
             </DialogActions>
           </DialogBody>

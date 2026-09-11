@@ -84,17 +84,20 @@ export interface PositionDto {
   description?: string;
   isActive: boolean;
   standardSalary?: number;
+  rankLevel: number;
 }
 
 export interface CreatePositionRequest {
   positionCode: string;
   positionName: string;
   description?: string;
+  rankLevel: number;
 }
 
 export interface UpdatePositionRequest {
   positionName: string;
   description?: string;
+  rankLevel: number;
 }
 
 export interface AttendanceRecordDto {
