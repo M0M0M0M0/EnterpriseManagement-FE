@@ -1257,6 +1257,12 @@ p {
   letter-spacing: 0.5px;
 }
 
+.field-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* HR data and management */
 .department-breakdown > div > div {
   gap: 3px;

@@ -55,7 +55,6 @@ function UnavailableState({ description }: { description: string }) {
 export function AdminUsersApiPage() {
   const notify = useNotify();
   const [users, setUsers] = useState<UserDto[]>([]);
-  const [roles, setRoles] = useState<RoleDto[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [sending, setSending] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -68,7 +67,6 @@ export function AdminUsersApiPage() {
   const [userForm, setUserForm] = useState({
     username: "",
     email: "",
-    roleCode: "EMPLOYEE",
     roleCodes: "EMPLOYEE",
     employeeCode: "",
   });
@@ -82,24 +80,13 @@ export function AdminUsersApiPage() {
       .finally(() => setLoadingUsers(false));
   };
 
-  useEffect(() => {
-    loadUsers();
-    // Chỉ cần danh sách role để gợi ý trong ô "Vai trò" của form tài khoản.
-    // Quản trị Role / Menu / Permission đã gộp hết sang trang System Administration.
-    roleApi
-      .getAll()
-      .then(setRoles)
-      .catch(() => setRoles([]));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const roleOptions = roles.length ? roles.map((role) => role.roleCode) : ["ADMIN", "MANAGER", "EMPLOYEE"];
+  useEffect(loadUsers, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openCreateUser = () => {
     setEditingUser(null);
     setUserForm({
       username: "",
       email: "",
-      roleCode: "EMPLOYEE",
       roleCodes: "EMPLOYEE",
       employeeCode: "",
     });
@@ -111,7 +98,6 @@ export function AdminUsersApiPage() {
     setUserForm({
       username: user.username,
       email: user.email,
-      roleCode: user.roles[0] ?? "EMPLOYEE",
       roleCodes: user.roles.join(", "),
       employeeCode: user.employeeCode ?? "",
     });
@@ -136,7 +122,6 @@ export function AdminUsersApiPage() {
         const result = await userApi.create({
           username: userForm.username,
           email: userForm.email,
-          roleCode: userForm.roleCode,
           employeeCode: userForm.employeeCode || undefined,
         });
         setShowPassword(false);
@@ -308,30 +293,32 @@ export function AdminUsersApiPage() {
                   <Input value={userForm.email} onChange={(_, data) => setUserForm((value) => ({ ...value, email: data.value }))} />
                 </Field>
               </div>
-              <div className="form-grid">
-                <Field label={editingUser ? "Vai trò, phân tách bằng dấu phẩy" : "Vai trò"} required>
-                  <Input
-                    list={editingUser ? undefined : "role-options"}
-                    value={editingUser ? userForm.roleCodes : userForm.roleCode}
-                    onChange={(_, data) =>
-                      setUserForm((value) =>
-                        editingUser ? { ...value, roleCodes: data.value } : { ...value, roleCode: data.value },
-                      )
-                    }
-                  />
-                  <datalist id="role-options">
-                    {roleOptions.map((roleCode) => (
-                      <option key={roleCode} value={roleCode} />
-                    ))}
-                  </datalist>
-                </Field>
-                <Field label="Mã nhân viên liên kết">
+              {editingUser ? (
+                <div className="form-grid">
+                  <Field label="Vai trò, phân tách bằng dấu phẩy" required>
+                    <Input
+                      value={userForm.roleCodes}
+                      onChange={(_, data) => setUserForm((value) => ({ ...value, roleCodes: data.value }))}
+                    />
+                  </Field>
+                  <Field label="Mã nhân viên liên kết">
+                    <Input
+                      value={userForm.employeeCode}
+                      onChange={(_, data) => setUserForm((value) => ({ ...value, employeeCode: data.value }))}
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <Field
+                  label="Mã nhân viên liên kết"
+                  hint="Vai trò tự lấy theo chức vụ của nhân viên này. Bỏ trống nếu tạo tài khoản không gắn nhân viên (cần Role đã gán role mặc định)."
+                >
                   <Input
                     value={userForm.employeeCode}
                     onChange={(_, data) => setUserForm((value) => ({ ...value, employeeCode: data.value }))}
                   />
                 </Field>
-              </div>
+              )}
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setUserOpen(false)}>Hủy</Button>

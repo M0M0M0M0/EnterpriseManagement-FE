@@ -31,8 +31,8 @@ import {
 } from "@fluentui/react-icons";
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { menuApi } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
+import { useMenuStore } from "../store/useMenuStore";
 import type { UserRole } from "../types/domain";
 import { EmployeeAvatar } from "./ui";
 
@@ -54,6 +54,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
   manager: [
     { to: "/manager/dashboard", label: "Dashboard tổng quan", icon: <HomeRegular />, end: true },
     { to: "/manager/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
+    { to: "/employee/attendance", label: "Chấm công", icon: <ClockRegular /> },
     { to: "/manager/attendance", label: "Quản lý chấm công", icon: <ClockRegular /> },
     { to: "/manager/leave", label: "Duyệt đơn xin nghỉ", icon: <DocumentBulletListRegular /> },
     { to: "/manager/sales", label: "Quản lý KPI & Sale", icon: <ChartMultipleRegular /> },
@@ -135,33 +136,26 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [dynamicNavItems, setDynamicNavItems] = useState<NavItem[] | null>(null);
+  const menus = useMenuStore((state) => state.menus);
+  const menuStatus = useMenuStore((state) => state.status);
+  const loadMenus = useMenuStore((state) => state.load);
 
   useEffect(() => {
     if (!session) return;
-    let cancelled = false;
-    menuApi
-      .getMine()
-      .then((menus) => {
-        if (cancelled) return;
-        const sorted = [...menus].sort((a, b) => a.displayOrder - b.displayOrder);
-        setDynamicNavItems(
-          sorted.map((menu, index) => ({
+    loadMenus(session.token);
+  }, [session, loadMenus]);
+
+  const dynamicNavItems: NavItem[] | null =
+    menuStatus === "loaded" && menus
+      ? [...menus]
+          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .map((menu, index) => ({
             to: menu.route,
             label: menu.menuName,
             icon: resolveIcon(menu.icon),
             end: index === 0,
-          })),
-        );
-      })
-      .catch(() => {
-        // Menu chưa seed được hoặc API lỗi -> giữ nav tĩnh theo role để không bao giờ mất điều hướng.
-        if (!cancelled) setDynamicNavItems(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [session]);
+          }))
+      : null; // Menu chưa tải xong hoặc API lỗi -> giữ nav tĩnh theo role để không bao giờ mất điều hướng.
 
   if (!role || !session) return null;
   const navItems = dynamicNavItems && dynamicNavItems.length > 0 ? dynamicNavItems : navByRole[role];
@@ -169,6 +163,7 @@ export function AppShell() {
 
   const doLogout = () => {
     logout();
+    useMenuStore.getState().reset();
     navigate("/login");
   };
 

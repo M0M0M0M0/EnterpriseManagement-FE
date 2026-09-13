@@ -1,5 +1,5 @@
 import { Skeleton, SkeletonItem } from "@fluentui/react-components";
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import {
@@ -9,9 +9,8 @@ import {
   ProfilePage,
 } from "./pages/CommonPages";
 import { LoginPage } from "./pages/LoginPage";
-import { menuApi } from "./services/api";
 import { useAuthStore } from "./store/useAuthStore";
-import type { UserRole } from "./types/domain";
+import { useMenuStore } from "./store/useMenuStore";
 
 const EmployeeDashboardPage = lazy(() =>
   import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeDashboardPage })),
@@ -76,49 +75,44 @@ const AdminSystemPage = lazy(() =>
   import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminSystemApiPage })),
 );
 
-function RequireRole({ role, children }: { role: UserRole; children: ReactNode }) {
-  const currentRole = useAuthStore((state) => state.role);
-  if (!currentRole) return <Navigate to="/login" replace />;
-  if (currentRole !== role) return <Navigate to="/403" replace />;
-  return children;
-}
-
 function RequireAuth({ children }: { children: ReactNode }) {
   const currentRole = useAuthStore((state) => state.role);
   if (!currentRole) return <Navigate to="/login" replace />;
   return children;
 }
 
-// Audit Log là trang dùng chung cho toàn hệ thống, không thuộc riêng role nào: Admin luôn
-// xem được, Manager xem được khi Admin cấp permission "page.admin.audit" cho role MANAGER.
-// Vì vậy gate theo permission thực tế (menu trả về từ /api/menus/mine) thay vì so khớp role
-// cứng như RequireRole, để không phải tạo route/menu riêng cho từng role.
+// Chốt chặn hẹp, chỉ dùng riêng cho /admin/payroll (chưa có menu/permission thật) — xem
+// ghi chú cạnh route bên dưới. Không dùng lại chỗ khác.
+function RequirePayrollPlaceholder({ children }: { children: ReactNode }) {
+  const currentRole = useAuthStore((state) => state.role);
+  if (!currentRole) return <Navigate to="/login" replace />;
+  if (currentRole !== "admin") return <Navigate to="/403" replace />;
+  return children;
+}
+
+// Không có route/trang nào gắn cứng theo role trong code — mọi trang nghiệp vụ đều gác
+// bằng permission thật (menu trả về từ /api/menus/mine, do Admin cấu hình qua màn hình
+// Role/Permission/Menu). Vai trò nào cũng dùng được bất kỳ trang nào MIỄN LÀ Admin đã cấp
+// đúng permission cho role đó — kể cả role tạo mới sau này, không cần sửa code ở đây.
 function RequireMenuAccess({ route, children }: { route: string; children: ReactNode }) {
   const session = useAuthStore((state) => state.session);
   const currentRole = useAuthStore((state) => state.role);
-  const [status, setStatus] = useState<"loading" | "allowed" | "denied">("loading");
+  const menus = useMenuStore((state) => state.menus);
+  const status = useMenuStore((state) => state.status);
+  const loadMenus = useMenuStore((state) => state.load);
 
   useEffect(() => {
     if (!session) return;
-    let cancelled = false;
-    setStatus("loading");
-    menuApi
-      .getMine()
-      .then((menus) => {
-        if (cancelled) return;
-        setStatus(menus.some((menu) => menu.route === route) ? "allowed" : "denied");
-      })
-      .catch(() => {
-        if (!cancelled) setStatus("denied");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [session, route]);
+    loadMenus(session.token);
+  }, [session, loadMenus]);
 
   if (!currentRole || !session) return <Navigate to="/login" replace />;
-  if (status === "loading") return null;
-  if (status === "denied") return <Navigate to="/403" replace />;
+  if (status === "idle" || status === "loading") return null;
+  // Lỗi tải menu (API lỗi, mất mạng...) thì cho qua thay vì khoá luôn người dùng ra ngoài —
+  // các trang bên trong vẫn tự chịu trách nhiệm gọi API thật với permission thật ở backend.
+  if (status === "loaded" && !(menus ?? []).some((menu) => menu.route === route)) {
+    return <Navigate to="/403" replace />;
+  }
   return children;
 }
 
@@ -143,6 +137,32 @@ function AppRedirect() {
   return <Navigate to="/admin/users" replace />;
 }
 
+// Mọi trang nghiệp vụ (đều có 1 Menu tương ứng đã seed sẵn permission "page.*") gác bằng
+// RequireMenuAccess — vai trò nào có permission cho route đó thì vào được, không phân biệt
+// role cố định trong code. Muốn đổi ai được dùng trang nào, Admin sửa Role/Permission/Menu,
+// không cần deploy lại code.
+const businessRoutes: { path: string; element: ReactNode }[] = [
+  { path: "/employee/dashboard", element: <EmployeeDashboardPage /> },
+  { path: "/employee/attendance", element: <EmployeeAttendancePage /> },
+  { path: "/employee/leave", element: <EmployeeLeavePage /> },
+  { path: "/employee/sales", element: <EmployeeSalesPage /> },
+  { path: "/employee/customers", element: <EmployeeCustomersPage /> },
+  { path: "/manager/dashboard", element: <ManagerDashboardPage /> },
+  { path: "/manager/employees", element: <ManagerEmployeesPage /> },
+  { path: "/manager/attendance", element: <ManagerAttendancePage /> },
+  { path: "/manager/leave", element: <ManagerLeavePage /> },
+  { path: "/manager/sales", element: <ManagerSalesPage /> },
+  { path: "/manager/customers", element: <ManagerCustomersPage /> },
+  { path: "/manager/organization", element: <ManagerOrganizationPage /> },
+  { path: "/admin/users", element: <AdminUsersPage /> },
+  { path: "/admin/employees", element: <AdminEmployeesPage /> },
+  { path: "/admin/departments", element: <AdminDepartmentsPage /> },
+  { path: "/admin/positions", element: <AdminPositionsPage /> },
+  { path: "/admin/customers", element: <AdminCustomersPage /> },
+  { path: "/admin/system", element: <AdminSystemPage /> },
+  { path: "/admin/audit", element: <AdminAuditLogPage /> },
+];
+
 function App() {
   return (
     <Suspense fallback={<RouteLoading />}>
@@ -156,61 +176,31 @@ function App() {
           <Route path="/account-settings" element={<AccountSettingsPage />} />
         </Route>
 
-        <Route
-          element={
-            <RequireRole role="employee">
-              <AppShell />
-            </RequireRole>
-          }
-        >
-          <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
-          <Route path="/employee/attendance" element={<EmployeeAttendancePage />} />
-          <Route path="/employee/leave" element={<EmployeeLeavePage />} />
-          <Route path="/employee/sales" element={<EmployeeSalesPage />} />
-          <Route path="/employee/customers" element={<EmployeeCustomersPage />} />
-        </Route>
+        {businessRoutes.map(({ path, element }) => (
+          <Route
+            key={path}
+            element={
+              <RequireMenuAccess route={path}>
+                <AppShell />
+              </RequireMenuAccess>
+            }
+          >
+            <Route path={path} element={element} />
+          </Route>
+        ))}
+        <Route path="/admin/audit-log" element={<Navigate to="/admin/audit" replace />} />
 
+        {/* Payroll chưa có menu/permission riêng (tính năng chưa xong, không có trong sidebar) —
+            giữ tạm 1 chốt chặn hẹp theo role admin cho tới khi được đưa vào hệ thống
+            Menu/Permission như các trang khác ở trên. */}
         <Route
           element={
-            <RequireRole role="manager">
+            <RequirePayrollPlaceholder>
               <AppShell />
-            </RequireRole>
+            </RequirePayrollPlaceholder>
           }
         >
-          <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
-          <Route path="/manager/employees" element={<ManagerEmployeesPage />} />
-          <Route path="/manager/attendance" element={<ManagerAttendancePage />} />
-          <Route path="/manager/leave" element={<ManagerLeavePage />} />
-          <Route path="/manager/sales" element={<ManagerSalesPage />} />
-          <Route path="/manager/customers" element={<ManagerCustomersPage />} />
-          <Route path="/manager/organization" element={<ManagerOrganizationPage />} />
-        </Route>
-
-        <Route
-          element={
-            <RequireRole role="admin">
-              <AppShell />
-            </RequireRole>
-          }
-        >
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/employees" element={<AdminEmployeesPage />} />
-          <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
-          <Route path="/admin/positions" element={<AdminPositionsPage />} />
-          <Route path="/admin/customers" element={<AdminCustomersPage />} />
           <Route path="/admin/payroll" element={<AdminPayrollPage />} />
-          <Route path="/admin/system" element={<AdminSystemPage />} />
-        </Route>
-
-        <Route
-          element={
-            <RequireMenuAccess route="/admin/audit">
-              <AppShell />
-            </RequireMenuAccess>
-          }
-        >
-          <Route path="/admin/audit" element={<AdminAuditLogPage />} />
-          <Route path="/admin/audit-log" element={<Navigate to="/admin/audit" replace />} />
         </Route>
 
         <Route path="/" element={<Navigate to="/app" replace />} />

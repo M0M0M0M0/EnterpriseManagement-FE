@@ -193,6 +193,7 @@ export function EmployeeAttendancePage() {
   const [history, setHistory] = useState<AttendanceRecordDto[]>([]);
   const [adjustments, setAdjustments] = useState<AttendanceAdjustmentDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [punching, setPunching] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [form, setForm] = useState({
@@ -219,6 +220,25 @@ export function EmployeeAttendancePage() {
   };
 
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const today = history.find((record) => record.attendanceDate === isoDate());
+  const nextAction = !today?.checkInTime ? "Check-in" : !today?.checkOutTime ? "Check-out" : null;
+
+  const punch = async () => {
+    setPunching(true);
+    try {
+      const record = await attendanceApi.punch();
+      notify({
+        ok: true,
+        message: record.checkOutTime ? "Check-out thành công." : "Check-in thành công.",
+      });
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setPunching(false);
+    }
+  };
 
   const send = async () => {
     if (!form.reason.trim()) {
@@ -261,7 +281,41 @@ export function EmployeeAttendancePage() {
       {loading ? (
         <Spinner label="Đang tải..." />
       ) : (
-        <div className="two-column-grid">
+        <>
+          <section className="attendance-hero">
+            <div className="attendance-hero-main">
+              <span className="shift-icon">
+                <ClockRegular />
+              </span>
+              <div>
+                <span>Chấm công hôm nay</span>
+                <h2>{today ? today.status : "Chưa chấm công"}</h2>
+                <p>
+                  Vào: {formatDateTime(today?.checkInTime)} · Ra: {formatDateTime(today?.checkOutTime)}
+                </p>
+              </div>
+            </div>
+            <div className="attendance-state">
+              {today ? <AttendanceBadge status={today.status} /> : <Badge appearance="outline">Chưa chấm công</Badge>}
+              {nextAction ? (
+                <Button
+                  size="large"
+                  appearance="primary"
+                  icon={<CheckmarkCircleRegular />}
+                  disabled={punching}
+                  onClick={punch}
+                >
+                  {punching ? <Spinner size="tiny" /> : nextAction}
+                </Button>
+              ) : (
+                <div className="complete-state">
+                  <CheckmarkCircleRegular />
+                  <span>Đã hoàn thành chấm công hôm nay</span>
+                </div>
+              )}
+            </div>
+          </section>
+          <div className="two-column-grid">
           <SectionPanel title="Lịch sử chấm công">
             {history.length ? (
               <div className="attendance-list">
@@ -306,7 +360,8 @@ export function EmployeeAttendancePage() {
               <EmptyState title="Chưa có yêu cầu" description="Yêu cầu chỉnh sửa chấm công sẽ hiển thị tại đây." />
             )}
           </SectionPanel>
-        </div>
+          </div>
+        </>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={(_, data) => setDialogOpen(data.open)}>

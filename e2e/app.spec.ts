@@ -78,6 +78,37 @@ async function mockApi(page: Page) {
       return;
     }
 
+    // Route guard (RequireMenuAccess) quyết định vào được trang nào dựa trên danh sách này,
+    // không còn theo role cứng — mock đúng menu cho từng user để phản ánh hành vi thật.
+    if (path === "/api/menus/mine") {
+      const auth = request.headers()["authorization"] ?? "";
+      const username = auth.replace("Bearer ", "").replace("-token", "");
+      const menusByUser: Record<string, { route: string; menuName: string }[]> = {
+        employee: [{ route: "/employee/dashboard", menuName: "Dashboard" }],
+        manager: [{ route: "/manager/dashboard", menuName: "Dashboard tổng quan" }],
+        admin: [
+          { route: "/admin/users", menuName: "User / Role / Permission" },
+          { route: "/admin/audit", menuName: "Audit Log" },
+          { route: "/admin/system", menuName: "System Administration" },
+        ],
+      };
+      const list = menusByUser[username] ?? [];
+      await json(
+        route,
+        list.map((m, index) => ({
+          menuCode: m.route,
+          menuName: m.menuName,
+          icon: "SquareRegular",
+          route: m.route,
+          displayOrder: index + 1,
+          permissions: [],
+          isVisible: true,
+          isActive: true,
+        })),
+      );
+      return;
+    }
+
     await json(route, []);
   });
 }

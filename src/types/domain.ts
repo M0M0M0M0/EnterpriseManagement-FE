@@ -263,7 +263,9 @@ export interface UserDto {
 export interface CreateUserRequest {
   username: string;
   email: string;
-  roleCode: string;
+  // Không bắt buộc: backend tự lấy role từ Position.RoleCode của nhân viên liên kết khi
+  // bỏ trống. Chỉ cần truyền tay khi tạo tài khoản không gắn nhân viên (vd tài khoản hệ thống).
+  roleCode?: string;
   employeeCode?: string;
 }
 
