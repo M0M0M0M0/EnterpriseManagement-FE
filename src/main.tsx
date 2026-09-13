@@ -5,6 +5,9 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.tsx";
 import { appTheme } from "./app/theme";
+import { forceInstantFluentMotion } from "./utils/forceInstantMotion";
+
+forceInstantFluentMotion();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
