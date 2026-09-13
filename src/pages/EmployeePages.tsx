@@ -117,7 +117,9 @@ export function EmployeeDashboardPage() {
   };
 
   const today = data.todayAttendance;
-  const nextAction = !today?.checkInTime ? "Check-in" : !today?.checkOutTime ? "Check-out" : null;
+  // Lần punch đầu tiên trong ngày luôn là Check-in; mọi lần sau luôn là Check-out (đè lên giờ
+  // ra cũ nếu bấm nhiều lần) — khớp PunchAsync ở backend (AttendanceService.cs).
+  const nextAction = !today?.checkInTime ? "Check-in" : "Check-out";
 
   return (
     <div className="page-stack">
@@ -141,22 +143,15 @@ export function EmployeeDashboardPage() {
         </div>
         <div className="attendance-state">
           {today ? <AttendanceBadge status={today.status} /> : <Badge appearance="outline">Chưa chấm công</Badge>}
-          {nextAction ? (
-            <Button
-              size="large"
-              appearance="primary"
-              icon={<CheckmarkCircleRegular />}
-              disabled={punching}
-              onClick={punch}
-            >
-              {punching ? <Spinner size="tiny" /> : nextAction}
-            </Button>
-          ) : (
-            <div className="complete-state">
-              <CheckmarkCircleRegular />
-              <span>Đã hoàn thành chấm công hôm nay</span>
-            </div>
-          )}
+          <Button
+            size="large"
+            appearance="primary"
+            icon={<CheckmarkCircleRegular />}
+            disabled={punching}
+            onClick={punch}
+          >
+            {punching ? <Spinner size="tiny" /> : nextAction}
+          </Button>
         </div>
       </section>
 
@@ -222,7 +217,9 @@ export function EmployeeAttendancePage() {
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = history.find((record) => record.attendanceDate === isoDate());
-  const nextAction = !today?.checkInTime ? "Check-in" : !today?.checkOutTime ? "Check-out" : null;
+  // Lần punch đầu tiên trong ngày luôn là Check-in; mọi lần sau luôn là Check-out (đè lên giờ
+  // ra cũ nếu bấm nhiều lần) — khớp PunchAsync ở backend (AttendanceService.cs).
+  const nextAction = !today?.checkInTime ? "Check-in" : "Check-out";
 
   const punch = async () => {
     setPunching(true);
@@ -297,22 +294,15 @@ export function EmployeeAttendancePage() {
             </div>
             <div className="attendance-state">
               {today ? <AttendanceBadge status={today.status} /> : <Badge appearance="outline">Chưa chấm công</Badge>}
-              {nextAction ? (
-                <Button
-                  size="large"
-                  appearance="primary"
-                  icon={<CheckmarkCircleRegular />}
-                  disabled={punching}
-                  onClick={punch}
-                >
-                  {punching ? <Spinner size="tiny" /> : nextAction}
-                </Button>
-              ) : (
-                <div className="complete-state">
-                  <CheckmarkCircleRegular />
-                  <span>Đã hoàn thành chấm công hôm nay</span>
-                </div>
-              )}
+              <Button
+                size="large"
+                appearance="primary"
+                icon={<CheckmarkCircleRegular />}
+                disabled={punching}
+                onClick={punch}
+              >
+                {punching ? <Spinner size="tiny" /> : nextAction}
+              </Button>
             </div>
           </section>
           <div className="two-column-grid">
