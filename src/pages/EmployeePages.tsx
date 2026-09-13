@@ -17,7 +17,6 @@ import {
 import {
   AddRegular,
   ArrowClockwiseRegular,
-  CalendarCheckmarkRegular,
   CalendarRegular,
   CheckmarkCircleRegular,
   ClockRegular,
@@ -57,6 +56,7 @@ import type {
   SaleDto,
 } from "../types/domain";
 import {
+  formatAmountInput,
   formatCurrency,
   formatDate,
   formatDateTime,
@@ -64,6 +64,7 @@ import {
   formatTime,
   isoDate,
   leaveSessionLabels,
+  parseAmountInput,
   shortLeaveSlotLabel,
   shortLeaveSlots,
 } from "../utils/format";
@@ -727,6 +728,9 @@ export function EmployeeLeavePage() {
   );
 }
 
+// Sentinel cho lựa chọn "+ Khách hàng mới" trong Dropdown chọn khách hàng lúc tạo sale.
+const NEW_CUSTOMER_OPTION = "__new__";
+
 export function EmployeeSalesPage() {
   const notify = useNotify();
   const [sales, setSales] = useState<SaleDto[]>([]);
@@ -735,7 +739,20 @@ export function EmployeeSalesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SaleDto | null>(null);
   const [sending, setSending] = useState(false);
-  const [form, setForm] = useState({ customerCode: "", amount: "", note: "" });
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [form, setForm] = useState({
+    customerCode: "",
+    newCustomerName: "",
+    newCustomerPhone: "",
+    newCustomerEmail: "",
+    newCustomerAddress: "",
+    amount: "",
+    note: "",
+  });
+
+  // Khách hàng đang Potential (mới nhập kèm 1 sale khác chưa được duyệt) chưa nên chọn lại được
+  // ở đây — chỉ hiện khách đã Active, tránh nhầm với khách hàng "ảo" chưa chắc tồn tại thật.
+  const activeCustomers = customers.filter((c) => c.status === "Active");
 
   const load = () => {
     setLoading(true);
@@ -750,20 +767,37 @@ export function EmployeeSalesPage() {
 
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const emptyForm = {
+    customerCode: "",
+    newCustomerName: "",
+    newCustomerPhone: "",
+    newCustomerEmail: "",
+    newCustomerAddress: "",
+    amount: "",
+    note: "",
+  };
+
   const openCreate = () => {
     setEditing(null);
-    setForm({ customerCode: customers[0]?.customerCode ?? "", amount: "", note: "" });
+    setForm({ ...emptyForm, customerCode: activeCustomers[0]?.customerCode ?? "" });
     setOpen(true);
   };
 
   const openEdit = (sale: SaleDto) => {
     setEditing(sale);
-    setForm({ customerCode: sale.customerCode, amount: String(sale.amount), note: sale.note ?? "" });
+    setForm({
+      ...emptyForm,
+      customerCode: sale.customerCode,
+      amount: formatAmountInput(String(sale.amount)),
+      note: sale.note ?? "",
+    });
     setOpen(true);
   };
 
+  const isNewCustomer = form.customerCode === NEW_CUSTOMER_OPTION;
+
   const submit = async () => {
-    const amount = Number(form.amount);
+    const amount = parseAmountInput(form.amount);
     if (!amount || amount <= 0) {
       notify({ ok: false, message: "Giá trị hợp đồng phải lớn hơn 0." });
       return;
@@ -773,6 +807,21 @@ export function EmployeeSalesPage() {
       if (editing) {
         await saleApi.update(editing.id, { amount, note: form.note });
         notify({ ok: true, message: "Đã cập nhật sale." });
+      } else if (isNewCustomer) {
+        if (!form.newCustomerName.trim() || !form.newCustomerPhone.trim()) {
+          notify({ ok: false, message: "Vui lòng nhập đủ tên và số điện thoại khách hàng mới." });
+          setSending(false);
+          return;
+        }
+        await saleApi.submit({
+          newCustomerName: form.newCustomerName,
+          newCustomerPhone: form.newCustomerPhone,
+          newCustomerEmail: form.newCustomerEmail || undefined,
+          newCustomerAddress: form.newCustomerAddress || undefined,
+          amount,
+          note: form.note,
+        });
+        notify({ ok: true, message: "Đã tạo sale mới." });
       } else {
         if (!form.customerCode) {
           notify({ ok: false, message: "Vui lòng chọn khách hàng." });
@@ -788,6 +837,19 @@ export function EmployeeSalesPage() {
       notify({ ok: false, message: errorMessage(err) });
     } finally {
       setSending(false);
+    }
+  };
+
+  const cancelSale = async (sale: SaleDto) => {
+    setCancellingId(sale.id);
+    try {
+      await saleApi.cancel(sale.id);
+      notify({ ok: true, message: "Đã hủy sale." });
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -819,13 +881,23 @@ export function EmployeeSalesPage() {
                       {formatCurrency(sale.amount)} · {formatDate(sale.orderDate)}
                     </span>
                     {sale.note ? <p>{sale.note}</p> : null}
+                    {sale.rejectionReason ? <p>Lý do từ chối: {sale.rejectionReason}</p> : null}
                   </div>
                   <div className="row-actions">
                     <RequestBadge status={sale.status} />
                     {sale.status === "Pending" ? (
-                      <Button size="small" onClick={() => openEdit(sale)}>
-                        Sửa
-                      </Button>
+                      <>
+                        <Button size="small" onClick={() => openEdit(sale)}>
+                          Sửa
+                        </Button>
+                        <Button
+                          size="small"
+                          disabled={cancellingId === sale.id}
+                          onClick={() => cancelSale(sale)}
+                        >
+                          {cancellingId === sale.id ? <Spinner size="tiny" /> : "Hủy"}
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 </article>
@@ -837,16 +909,6 @@ export function EmployeeSalesPage() {
         </SectionPanel>
       )}
 
-      <SectionPanel title="KPI">
-        <div className="info-banner">
-          <CalendarCheckmarkRegular />
-          <div>
-            <strong>Chưa khả dụng</strong>
-            <p>Backend hiện chưa có API tính target/KPI theo kỳ. Mục này sẽ hiển thị khi API sẵn sàng.</p>
-          </div>
-        </div>
-      </SectionPanel>
-
       <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
@@ -855,23 +917,57 @@ export function EmployeeSalesPage() {
               {!editing ? (
                 <Field label="Khách hàng" required>
                   <Dropdown
-                    value={customers.find((c) => c.customerCode === form.customerCode)?.customerName ?? ""}
+                    value={
+                      isNewCustomer
+                        ? "+ Khách hàng mới"
+                        : activeCustomers.find((c) => c.customerCode === form.customerCode)?.customerName ?? ""
+                    }
                     selectedOptions={[form.customerCode]}
                     onOptionSelect={(_, data) => setForm((v) => ({ ...v, customerCode: data.optionValue ?? "" }))}
                   >
-                    {customers.map((c) => (
+                    {activeCustomers.map((c) => (
                       <Option key={c.customerCode} value={c.customerCode}>
                         {c.customerName}
                       </Option>
                     ))}
+                    <Option key={NEW_CUSTOMER_OPTION} value={NEW_CUSTOMER_OPTION}>
+                      + Khách hàng mới
+                    </Option>
                   </Dropdown>
                 </Field>
               ) : null}
+              {!editing && isNewCustomer ? (
+                <>
+                  <Field label="Tên khách hàng mới" required>
+                    <Input
+                      value={form.newCustomerName}
+                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerName: data.value }))}
+                    />
+                  </Field>
+                  <Field label="Số điện thoại" required>
+                    <Input
+                      value={form.newCustomerPhone}
+                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerPhone: data.value }))}
+                    />
+                  </Field>
+                  <Field label="Email">
+                    <Input
+                      value={form.newCustomerEmail}
+                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerEmail: data.value }))}
+                    />
+                  </Field>
+                  <Field label="Địa chỉ">
+                    <Input
+                      value={form.newCustomerAddress}
+                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerAddress: data.value }))}
+                    />
+                  </Field>
+                </>
+              ) : null}
               <Field label="Giá trị hợp đồng (VND)" required>
                 <Input
-                  type="number"
                   value={form.amount}
-                  onChange={(_, data) => setForm((v) => ({ ...v, amount: data.value }))}
+                  onChange={(_, data) => setForm((v) => ({ ...v, amount: formatAmountInput(data.value) }))}
                 />
               </Field>
               <Field label="Ghi chú">
@@ -925,6 +1021,10 @@ export function EmployeeCustomersPage() {
   const submit = async () => {
     if (!form.customerName.trim()) {
       notify({ ok: false, message: "Vui lòng nhập tên khách hàng." });
+      return;
+    }
+    if (!form.phone.trim()) {
+      notify({ ok: false, message: "Vui lòng nhập số điện thoại khách hàng." });
       return;
     }
     setSending(true);
@@ -1018,7 +1118,7 @@ export function EmployeeCustomersPage() {
                 />
               </Field>
               <div className="form-grid">
-                <Field label="Điện thoại">
+                <Field label="Điện thoại" required>
                   <Input value={form.phone} onChange={(_, data) => setForm((v) => ({ ...v, phone: data.value }))} />
                 </Field>
                 <Field label="Email">

@@ -204,7 +204,7 @@ export interface CustomerDto {
 
 export interface CreateCustomerRequest {
   customerName: string;
-  phone?: string;
+  phone: string;
   email?: string;
   address?: string;
 }
@@ -220,12 +220,19 @@ export interface SaleDto {
   orderDate: string;
   status: string;
   note?: string;
+  rejectionReason?: string;
   approverName?: string;
   approvedAt?: string;
 }
 
 export interface SubmitSaleRequest {
-  customerCode: string;
+  // Đúng 1 trong 2: customerCode (khách hàng có sẵn) HOẶC newCustomerName+newCustomerPhone
+  // (khách hàng mới, tạo ở trạng thái Potential cho đến khi sale được duyệt).
+  customerCode?: string;
+  newCustomerName?: string;
+  newCustomerPhone?: string;
+  newCustomerEmail?: string;
+  newCustomerAddress?: string;
   amount: number;
   note?: string;
 }
@@ -233,6 +240,10 @@ export interface SubmitSaleRequest {
 export interface UpdateSaleRequest {
   amount: number;
   note?: string;
+}
+
+export interface RejectSaleRequest {
+  rejectionReason: string;
 }
 
 export interface EmployeeDashboardDto {
@@ -383,4 +394,71 @@ export interface SalaryCalculationResult {
   dailyRate: number;
   deductionAmount: number;
   netSalary: number;
+}
+
+export interface KpiLevelDto {
+  id: number;
+  levelOrder: number;
+  minimumRevenue: number;
+  commissionRate: number;
+}
+
+// Dùng khi tạo/sửa Plan — không có id vì level có thể là mới hoàn toàn (Update thay toàn bộ
+// danh sách level mỗi lần sửa).
+export interface KpiLevelInput {
+  levelOrder: number;
+  minimumRevenue: number;
+  commissionRate: number;
+}
+
+export interface AssignedEmployeeDto {
+  employeeCode: string;
+  fullName: string;
+}
+
+export interface KpiPlanDto {
+  id: number;
+  planName: string;
+  description?: string;
+  isActive: boolean;
+  levels: KpiLevelDto[];
+  assignedEmployees: AssignedEmployeeDto[];
+}
+
+export interface CreateKpiPlanRequest {
+  planName: string;
+  description?: string;
+  levels: KpiLevelInput[];
+}
+
+export interface UpdateKpiPlanRequest {
+  planName: string;
+  description?: string;
+  levels: KpiLevelInput[];
+}
+
+export interface AssignEmployeesRequest {
+  employeeCodes: string[];
+}
+
+export interface CommissionDto {
+  id: number;
+  employeeCode: string;
+  employeeName: string;
+  periodStartDate: string;
+  periodEndDate: string;
+  totalRevenue: number;
+  kpiPlanName: string;
+  levelOrder: number;
+  commissionRate: number;
+  commissionAmount: number;
+  status: string;
+  approverName?: string;
+  approvedAt?: string;
+}
+
+export interface CalculateCommissionRequest {
+  employeeCode: string;
+  periodStartDate: string;
+  periodEndDate: string;
 }

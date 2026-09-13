@@ -62,6 +62,9 @@ const AdminDepartmentsPage = lazy(() =>
 const AdminPositionsPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminPositionsPage })),
 );
+const AdminSalesPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminSalesPage })),
+);
 const AdminCustomersPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminCustomersPage })),
 );
@@ -73,6 +76,13 @@ const AdminAuditLogPage = lazy(() =>
 );
 const AdminSystemPage = lazy(() =>
   import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminSystemApiPage })),
+);
+
+const ManagerKpiCommissionPage = lazy(() =>
+  import("./pages/KpiCommissionPages").then((m) => ({ default: m.ManagerKpiCommissionPage })),
+);
+const EmployeeCommissionPage = lazy(() =>
+  import("./pages/KpiCommissionPages").then((m) => ({ default: m.EmployeeCommissionPage })),
 );
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -154,10 +164,13 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/manager/sales", element: <ManagerSalesPage /> },
   { path: "/manager/customers", element: <ManagerCustomersPage /> },
   { path: "/manager/organization", element: <ManagerOrganizationPage /> },
+  { path: "/manager/kpi-commission", element: <ManagerKpiCommissionPage /> },
+  { path: "/employee/commission", element: <EmployeeCommissionPage /> },
   { path: "/admin/users", element: <AdminUsersPage /> },
   { path: "/admin/employees", element: <AdminEmployeesPage /> },
   { path: "/admin/departments", element: <AdminDepartmentsPage /> },
   { path: "/admin/positions", element: <AdminPositionsPage /> },
+  { path: "/admin/sales", element: <AdminSalesPage /> },
   { path: "/admin/customers", element: <AdminCustomersPage /> },
   { path: "/admin/system", element: <AdminSystemPage /> },
   { path: "/admin/audit", element: <AdminAuditLogPage /> },

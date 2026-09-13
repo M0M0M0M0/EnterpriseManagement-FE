@@ -72,6 +72,20 @@ export function formatNumber(value: number) {
   );
 }
 
+// Định dạng số khi gõ vào ô nhập tiền: tự thêm dấu phẩy ngăn cách mỗi 3 số 0 (vd 5000000 ->
+// 5,000,000). Bỏ mọi ký tự không phải chữ số trước khi nhóm lại, để dùng trực tiếp trong
+// onChange của Input mà không cần validate riêng.
+export function formatAmountInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// Ngược lại với formatAmountInput: bỏ dấu phẩy để lấy số thật, dùng khi submit lên API.
+export function parseAmountInput(value: string) {
+  return Number(value.replace(/,/g, ""));
+}
+
 export const leaveUnitLabels: Record<string, string> = {
   Days: "ngày",
   Hours: "giờ",

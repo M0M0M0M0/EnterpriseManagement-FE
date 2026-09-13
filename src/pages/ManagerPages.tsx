@@ -466,6 +466,9 @@ export function ManagerSalesPage() {
   const [tab, setTab] = useState("pending");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<SaleDto | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -480,17 +483,40 @@ export function ManagerSalesPage() {
 
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const review = async (id: number, action: "approve" | "reject") => {
+  const approve = async (id: number) => {
     setBusyId(id);
     try {
-      if (action === "approve") await saleApi.approve(id);
-      else await saleApi.reject(id);
-      notify({ ok: true, message: action === "approve" ? "Đã duyệt sale." : "Đã từ chối sale." });
+      await saleApi.approve(id);
+      notify({ ok: true, message: "Đã duyệt sale." });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const openReject = (sale: SaleDto) => {
+    setRejectTarget(sale);
+    setRejectReason("");
+  };
+
+  const confirmReject = async () => {
+    if (!rejectTarget) return;
+    if (!rejectReason.trim()) {
+      notify({ ok: false, message: "Vui lòng nhập lý do từ chối." });
+      return;
+    }
+    setRejecting(true);
+    try {
+      await saleApi.reject(rejectTarget.id, { rejectionReason: rejectReason });
+      notify({ ok: true, message: "Đã từ chối sale." });
+      setRejectTarget(null);
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -529,13 +555,14 @@ export function ManagerSalesPage() {
                   {sale.customerName} · {formatCurrency(sale.amount)} · {formatDate(sale.orderDate)}
                 </span>
                 {sale.note ? <p>{sale.note}</p> : null}
+                {sale.rejectionReason ? <p>Lý do từ chối: {sale.rejectionReason}</p> : null}
               </div>
               {tab === "pending" ? (
                 <div className="review-actions">
-                  <Button appearance="primary" disabled={busyId === sale.id} onClick={() => review(sale.id, "approve")}>
+                  <Button appearance="primary" disabled={busyId === sale.id} onClick={() => approve(sale.id)}>
                     Duyệt
                   </Button>
-                  <Button disabled={busyId === sale.id} onClick={() => review(sale.id, "reject")}>
+                  <Button disabled={busyId === sale.id} onClick={() => openReject(sale)}>
                     Từ chối
                   </Button>
                 </div>
@@ -549,17 +576,34 @@ export function ManagerSalesPage() {
         <EmptyState title="Không có sale" description="Danh sách sẽ cập nhật khi có sale mới." />
       )}
 
-      <SectionPanel title="Set KPI theo kỳ">
-        <div className="info-banner">
-          <Badge appearance="tint" color="informative">
-            Chưa khả dụng
-          </Badge>
-          <div>
-            <strong>Backend chưa có API KPI</strong>
-            <p>Chức năng set target và tính % đạt KPI sẽ được bật khi backend bổ sung API tương ứng.</p>
-          </div>
-        </div>
-      </SectionPanel>
+      <Dialog open={rejectTarget !== null} onOpenChange={(_, data) => !data.open && setRejectTarget(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Từ chối sale?</DialogTitle>
+            <DialogContent className="form-stack">
+              <p>
+                Sale của <strong>{rejectTarget?.employeeName}</strong> — khách hàng {rejectTarget?.customerName},{" "}
+                {rejectTarget ? formatCurrency(rejectTarget.amount) : ""}.
+              </p>
+              <Field label="Lý do từ chối" required>
+                <Textarea
+                  resize="vertical"
+                  value={rejectReason}
+                  onChange={(_, data) => setRejectReason(data.value)}
+                />
+              </Field>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setRejectTarget(null)} disabled={rejecting}>
+                Hủy
+              </Button>
+              <Button appearance="primary" onClick={confirmReject} disabled={rejecting}>
+                {rejecting ? <Spinner size="tiny" /> : "Từ chối sale"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 }

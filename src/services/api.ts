@@ -3,7 +3,9 @@ import type {
   AttendanceAdjustmentDto,
   AttendanceRecordDto,
   AuthSession,
+  CalculateCommissionRequest,
   ChangePasswordRequest,
+  CommissionDto,
   CreateCustomerRequest,
   CreateDepartmentRequest,
   CreateEmployeeRequest,
@@ -12,13 +14,16 @@ import type {
   CreateRoleRequest,
   CreatePositionRequest,
   CreateUserRequest,
+  CreateKpiPlanRequest,
   CreateUserResult,
+  AssignEmployeesRequest,
   CustomerDto,
   DepartmentDto,
   EmployeeDashboardDto,
   EmployeeDto,
   AuditLogDto,
   AuditLogFilters,
+  KpiPlanDto,
   LeaveBalanceDto,
   LeaveRequestDto,
   LeaveTypeDto,
@@ -26,6 +31,7 @@ import type {
   MenuDto,
   PermissionDto,
   PositionDto,
+  RejectSaleRequest,
   RoleDto,
   SaleDto,
   SalaryCalculationResult,
@@ -34,6 +40,7 @@ import type {
   SubmitSaleRequest,
   UpdateDepartmentRequest,
   UpdateEmployeeRequest,
+  UpdateKpiPlanRequest,
   UpdateMenuRequest,
   UpdatePermissionRequest,
   UpdatePositionRequest,
@@ -168,7 +175,9 @@ export const saleApi = {
   getPending: () => http.get<SaleDto[]>("/sales/pending"),
   getHistory: () => http.get<SaleDto[]>("/sales/history"),
   approve: (id: number) => http.put<SaleDto>(`/sales/${id}/approve`),
-  reject: (id: number) => http.put<SaleDto>(`/sales/${id}/reject`),
+  reject: (id: number, request: RejectSaleRequest) =>
+    http.put<SaleDto>(`/sales/${id}/reject`, request),
+  cancel: (id: number) => http.put<SaleDto>(`/sales/${id}/cancel`),
 };
 
 export const userApi = {
@@ -231,4 +240,26 @@ export const payrollApi = {
     http.get<SalaryCalculationResult>(
       `/payroll/calculate?employeeCode=${employeeCode}&year=${year}&month=${month}`,
     ),
+};
+
+export const kpiPlanApi = {
+  getAll: () => http.get<KpiPlanDto[]>("/kpi-plans"),
+  getById: (id: number) => http.get<KpiPlanDto>(`/kpi-plans/${id}`),
+  create: (request: CreateKpiPlanRequest) =>
+    http.post<KpiPlanDto>("/kpi-plans", request),
+  update: (id: number, request: UpdateKpiPlanRequest) =>
+    http.put<KpiPlanDto>(`/kpi-plans/${id}`, request),
+  setActive: (id: number, isActive: boolean) =>
+    http.put<KpiPlanDto>(`/kpi-plans/${id}/active`, { isActive }),
+  assignEmployees: (id: number, request: AssignEmployeesRequest) =>
+    http.put<KpiPlanDto>(`/kpi-plans/${id}/employees`, request),
+};
+
+export const commissionApi = {
+  calculate: (request: CalculateCommissionRequest) =>
+    http.post<CommissionDto>("/commissions/calculate", request),
+  getMine: () => http.get<CommissionDto[]>("/commissions/mine"),
+  getPending: () => http.get<CommissionDto[]>("/commissions/pending"),
+  getHistory: () => http.get<CommissionDto[]>("/commissions/history"),
+  approve: (id: number) => http.put<CommissionDto>(`/commissions/${id}/approve`),
 };
