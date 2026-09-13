@@ -86,3 +86,17 @@ export const leaveSessionLabels: Record<string, string> = {
   Afternoon: "Buổi chiều (13:00-17:00)",
   FullDay: "Cả ngày",
 };
+
+// Khung giờ nghỉ ngắn cố định 30 phút, khớp với ShortLeaveSlotStarts ở backend
+// (LeaveRequestService.cs) — sáng 8h-12h, chiều 13h-17h, không tính giờ nghỉ trưa.
+export const shortLeaveSlots = [
+  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+  "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+];
+
+export function shortLeaveSlotLabel(start: string) {
+  const [h, m] = start.split(":").map(Number);
+  const endMinutes = h * 60 + m + 30;
+  const end = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+  return `${start} - ${end}`;
+}

@@ -64,6 +64,8 @@ import {
   formatTime,
   isoDate,
   leaveSessionLabels,
+  shortLeaveSlotLabel,
+  shortLeaveSlots,
 } from "../utils/format";
 
 function useEmployeeCode() {
@@ -370,10 +372,19 @@ export function EmployeeLeavePage() {
     startDate: isoDate(),
     endDate: isoDate(),
     session: "FullDay" as LeaveSession,
-    shortStart: "",
-    shortEnd: "",
+    shortSlot: shortLeaveSlots[0],
     reason: "",
   });
+
+  // Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc để quản lý kịp duyệt và sắp xếp
+  // công việc: xin trước/đúng 17h thì sớm nhất là ngày mai, xin sau 17h thì sớm nhất là
+  // ngày kia. Khớp với ResolveRequestedTime ở backend (LeaveRequestService.cs).
+  const minAnnualDate = (() => {
+    const now = new Date();
+    const daysAhead = now.getHours() < 17 ? 1 : 2;
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead);
+    return isoDate(d);
+  })();
 
   const load = () => {
     if (!employeeCode) return;
@@ -387,7 +398,15 @@ export function EmployeeLeavePage() {
         setRequests(r);
         setBalances(b);
         setLeaveTypes(t);
-        if (t.length) setForm((v) => ({ ...v, leaveTypeCode: v.leaveTypeCode || t[0].leaveTypeCode }));
+        if (t.length) {
+          setForm((v) => {
+            const nextCode = v.leaveTypeCode || t[0].leaveTypeCode;
+            if (nextCode === "ANNUAL" && v.startDate < minAnnualDate) {
+              return { ...v, leaveTypeCode: nextCode, startDate: minAnnualDate, endDate: minAnnualDate };
+            }
+            return { ...v, leaveTypeCode: nextCode };
+          });
+        }
       })
       .catch((err) => notify({ ok: false, message: errorMessage(err) }))
       .finally(() => setLoading(false));
@@ -397,6 +416,7 @@ export function EmployeeLeavePage() {
 
   const selectedType = leaveTypes.find((t) => t.leaveTypeCode === form.leaveTypeCode);
   const isShortLeave = selectedType?.accrualPeriod === "MonthlyReset";
+  const isAnnualLeave = form.leaveTypeCode === "ANNUAL";
   const isMultiDay = form.startDate !== form.endDate;
 
   const submit = async () => {
@@ -405,21 +425,25 @@ export function EmployeeLeavePage() {
       return;
     }
     if (isShortLeave) {
-      if (!form.shortStart || !form.shortEnd) {
-        notify({ ok: false, message: "Vui lòng chọn giờ bắt đầu và kết thúc." });
+      if (!form.shortSlot) {
+        notify({ ok: false, message: "Vui lòng chọn khung giờ nghỉ." });
         return;
       }
     } else if (!form.startDate || !form.endDate) {
       notify({ ok: false, message: "Vui lòng nhập đầy đủ ngày nghỉ." });
       return;
+    } else if (isAnnualLeave && form.startDate < minAnnualDate) {
+      notify({ ok: false, message: `Nghỉ có phép phải xin trước ít nhất 1 ngày. Ngày sớm nhất có thể xin: ${formatDate(minAnnualDate)}.` });
+      return;
     }
     setSending(true);
     try {
       if (isShortLeave) {
+        const today = isoDate();
         await leaveRequestApi.submit({
           leaveTypeCode: form.leaveTypeCode,
-          startDate: form.shortStart,
-          endDate: form.shortEnd,
+          startDate: `${today}T${form.shortSlot}:00`,
+          endDate: `${today}T${shortLeaveSlotLabel(form.shortSlot).split(" - ")[1]}:00`,
           reason: form.reason,
         });
       } else {
@@ -433,7 +457,7 @@ export function EmployeeLeavePage() {
       }
       notify({ ok: true, message: "Đơn nghỉ phép đã được gửi." });
       setOpen(false);
-      setForm((v) => ({ ...v, shortStart: "", shortEnd: "", reason: "" }));
+      setForm((v) => ({ ...v, shortSlot: shortLeaveSlots[0], reason: "" }));
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -556,7 +580,13 @@ export function EmployeeLeavePage() {
                   value={selectedType?.leaveTypeName ?? ""}
                   selectedOptions={[form.leaveTypeCode]}
                   onOptionSelect={(_, data) =>
-                    setForm((v) => ({ ...v, leaveTypeCode: data.optionValue ?? "" }))
+                    setForm((v) => {
+                      const nextCode = data.optionValue ?? "";
+                      if (nextCode === "ANNUAL" && v.startDate < minAnnualDate) {
+                        return { ...v, leaveTypeCode: nextCode, startDate: minAnnualDate, endDate: minAnnualDate };
+                      }
+                      return { ...v, leaveTypeCode: nextCode };
+                    })
                   }
                 >
                   {leaveTypes.map((t) => (
@@ -569,28 +599,32 @@ export function EmployeeLeavePage() {
               </Field>
 
               {isShortLeave ? (
-                <div className="form-grid">
-                  <Field label="Từ giờ" required>
-                    <Input
-                      type="datetime-local"
-                      value={form.shortStart}
-                      onChange={(_, data) => setForm((v) => ({ ...v, shortStart: data.value }))}
-                    />
-                  </Field>
-                  <Field label="Đến giờ" required>
-                    <Input
-                      type="datetime-local"
-                      value={form.shortEnd}
-                      onChange={(_, data) => setForm((v) => ({ ...v, shortEnd: data.value }))}
-                    />
-                  </Field>
-                </div>
+                <Field label="Khung giờ nghỉ (hôm nay)" required>
+                  <Dropdown
+                    value={shortLeaveSlotLabel(form.shortSlot)}
+                    selectedOptions={[form.shortSlot]}
+                    onOptionSelect={(_, data) =>
+                      setForm((v) => ({ ...v, shortSlot: data.optionValue ?? shortLeaveSlots[0] }))
+                    }
+                  >
+                    {shortLeaveSlots.map((slot) => (
+                      <Option key={slot} value={slot}>
+                        {shortLeaveSlotLabel(slot)}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                </Field>
               ) : (
                 <>
                   <div className="form-grid">
-                    <Field label="Từ ngày" required>
+                    <Field
+                      label="Từ ngày"
+                      required
+                      hint={isAnnualLeave ? `Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc.` : undefined}
+                    >
                       <Input
                         type="date"
+                        min={isAnnualLeave ? minAnnualDate : undefined}
                         value={form.startDate}
                         onChange={(_, data) => setForm((v) => ({ ...v, startDate: data.value }))}
                       />
@@ -598,11 +632,15 @@ export function EmployeeLeavePage() {
                     <Field label="Đến ngày" required>
                       <Input
                         type="date"
+                        min={isAnnualLeave ? minAnnualDate : undefined}
                         value={form.endDate}
                         onChange={(_, data) => setForm((v) => ({ ...v, endDate: data.value }))}
                       />
                     </Field>
                   </div>
+                  {isAnnualLeave && form.startDate < minAnnualDate ? (
+                    <FieldError message={`Ngày sớm nhất có thể xin nghỉ có phép là ${formatDate(minAnnualDate)}.`} />
+                  ) : null}
                   <Field label="Buổi nghỉ" required>
                     <Dropdown
                       value={isMultiDay ? leaveSessionLabels.FullDay : leaveSessionLabels[form.session]}
