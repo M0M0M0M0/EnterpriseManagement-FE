@@ -61,9 +61,10 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/manager/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
   ],
   admin: [
-    { to: "/admin/users", label: "User / Role / Permission", icon: <ShieldRegular />, end: true },
+    { to: "/admin/users", label: "Quản lý tài khoản", icon: <ShieldRegular />, end: true },
     { to: "/admin/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
-    { to: "/admin/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
+    { to: "/admin/departments", label: "Phòng ban", icon: <BuildingRegular /> },
+    { to: "/admin/positions", label: "Chức vụ", icon: <PersonRegular /> },
     { to: "/admin/customers", label: "Quản lý khách hàng", icon: <PeopleTeamRegular /> },
     { to: "/admin/audit", label: "Audit Log", icon: <HistoryRegular /> },
     { to: "/admin/system", label: "System Administration", icon: <SettingsRegular /> },
@@ -84,6 +85,7 @@ const iconByName: Record<string, ReactNode> = {
   HistoryRegular: <HistoryRegular />,
   SettingsRegular: <SettingsRegular />,
   MoneyRegular: <MoneyRegular />,
+  PersonRegular: <PersonRegular />,
 };
 
 function resolveIcon(name?: string): ReactNode {

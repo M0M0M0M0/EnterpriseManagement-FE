@@ -13,8 +13,6 @@ import {
   Input,
   Option,
   Spinner,
-  Tab,
-  TabList,
   Textarea,
 } from "@fluentui/react-components";
 import { AddRegular } from "@fluentui/react-icons";
@@ -26,6 +24,7 @@ import {
   departmentApi,
   employeeApi,
   positionApi,
+  roleApi,
 } from "../services/api";
 import { errorMessage } from "../services/http";
 import type {
@@ -33,6 +32,7 @@ import type {
   DepartmentDto,
   EmployeeDto,
   PositionDto,
+  RoleDto,
 } from "../types/domain";
 import { formatCurrency, formatDate } from "../utils/format";
 
@@ -231,15 +231,25 @@ export function AdminEmployeesPage() {
   // Khi chưa gõ tìm kiếm, chỉ gợi ý người ở bậc liền trên (vd Nhân viên -> chỉ thấy Quản lý,
   // không thấy Trưởng/Phó phòng). Trưởng phòng (bậc cao nhất) thì không gợi ý ai.
   // Gõ tìm kiếm sẽ mở rộng ra xem được tất cả các bậc trong phòng ban.
+  // Chỉ áp dụng logic này khi các chức vụ đã thực sự được set Cấp bậc khác nhau — nếu tất
+  // cả chức vụ đang cùng 1 mức (vd chưa ai chỉnh, mặc định 0 hết) thì không đủ dữ liệu để
+  // so sánh cao/thấp, cứ hiện toàn bộ người cùng phòng ban cho đơn giản.
+  const ranksConfigured = new Set(positions.map((p) => p.rankLevel)).size > 1;
   const selectedRank = positionByCode.get(form.positionCode)?.rankLevel;
-  const isTopRank = selectedRank !== undefined && !positions.some((p) => p.rankLevel < selectedRank);
-  const higherRanks = selectedRank !== undefined ? positions.map((p) => p.rankLevel).filter((r) => r < selectedRank) : [];
+  const isTopRank = ranksConfigured && selectedRank !== undefined && !positions.some((p) => p.rankLevel < selectedRank);
+  const higherRanks = ranksConfigured && selectedRank !== undefined ? positions.map((p) => p.rankLevel).filter((r) => r < selectedRank) : [];
   const nextHigherRank = higherRanks.length ? Math.max(...higherRanks) : undefined;
   const tierCandidates =
     nextHigherRank !== undefined
       ? departmentManagerCandidates.filter((e) => positionByCode.get(e.positionCode)?.rankLevel === nextHigherRank)
       : [];
-  const defaultManagerCandidates = isTopRank ? [] : tierCandidates.length ? tierCandidates : departmentManagerCandidates;
+  const defaultManagerCandidates = !ranksConfigured
+    ? departmentManagerCandidates
+    : isTopRank
+      ? []
+      : tierCandidates.length
+        ? tierCandidates
+        : departmentManagerCandidates;
 
   // Vẫn giữ quản lý hiện tại của hồ sơ (nếu có) trong danh sách hiển thị, dù người đó
   // khác bậc hoặc khác phòng ban, để mở form Sửa không làm mất lựa chọn đang có sẵn.
@@ -395,12 +405,13 @@ export function AdminEmployeesPage() {
                 <Field
                   label="Quản lý trực tiếp"
                   hint={
-                    form.departmentCode && departmentManagerCandidates.length > 0 && !managerSearch && !isTopRank && !tierCandidates.length
+                    ranksConfigured && form.departmentCode && departmentManagerCandidates.length > 0 && !managerSearch && !isTopRank && !tierCandidates.length
                       ? "Chưa có ai ở bậc liền trên trong phòng ban này, gõ để tìm người khác."
                       : undefined
                   }
                 >
                   <Combobox
+                    freeform
                     value={managerQuery}
                     selectedOptions={[form.managerCode || NO_MANAGER]}
                     placeholder={form.departmentCode ? "Gõ tên hoặc mã nhân viên để tìm..." : "Chọn phòng ban trước"}
@@ -441,25 +452,18 @@ export function AdminEmployeesPage() {
   );
 }
 
-export function AdminOrganizationPage() {
+export function AdminDepartmentsPage() {
   const notify = useNotify();
-  const [tab, setTab] = useState("departments");
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
-  const [positions, setPositions] = useState<PositionDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [deptOpen, setDeptOpen] = useState(false);
-  const [posOpen, setPosOpen] = useState(false);
-  const [editingPosition, setEditingPosition] = useState<PositionDto | null>(null);
   const [deptForm, setDeptForm] = useState({ departmentCode: "", departmentName: "", description: "" });
-  const [posForm, setPosForm] = useState({ positionCode: "", positionName: "", description: "", rankLevel: "50" });
 
   const load = () => {
     setLoading(true);
-    Promise.all([departmentApi.getAll(), positionApi.getAll()])
-      .then(([d, p]) => {
-        setDepartments(d);
-        setPositions(p);
-      })
+    departmentApi
+      .getAll()
+      .then(setDepartments)
       .catch((err) => notify({ ok: false, message: errorMessage(err) }))
       .finally(() => setLoading(false));
   };
@@ -492,87 +496,21 @@ export function AdminOrganizationPage() {
     }
   };
 
-  const openCreatePosition = () => {
-    setEditingPosition(null);
-    setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50" });
-    setPosOpen(true);
-  };
-
-  const openEditPosition = (p: PositionDto) => {
-    setEditingPosition(p);
-    setPosForm({
-      positionCode: p.positionCode,
-      positionName: p.positionName,
-      description: p.description ?? "",
-      rankLevel: String(p.rankLevel),
-    });
-    setPosOpen(true);
-  };
-
-  const submitPosition = async () => {
-    if (!posForm.positionCode.trim() || !posForm.positionName.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập mã và tên chức vụ." });
-      return;
-    }
-    const rankLevel = Number(posForm.rankLevel);
-    if (!Number.isFinite(rankLevel)) {
-      notify({ ok: false, message: "Cấp bậc phải là một số." });
-      return;
-    }
-    try {
-      if (editingPosition) {
-        await positionApi.update(editingPosition.positionCode, {
-          positionName: posForm.positionName,
-          description: posForm.description,
-          rankLevel,
-        });
-        notify({ ok: true, message: "Đã cập nhật chức vụ." });
-      } else {
-        await positionApi.create({ ...posForm, rankLevel });
-        notify({ ok: true, message: "Đã thêm chức vụ." });
-      }
-      setPosOpen(false);
-      setEditingPosition(null);
-      setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50" });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    }
-  };
-
-  const togglePosition = async (p: PositionDto) => {
-    try {
-      await positionApi.setActive(p.positionCode, !p.isActive);
-      notify({ ok: true, message: "Đã cập nhật trạng thái chức vụ." });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    }
-  };
-
   return (
     <div className="page-stack">
       <PageHeader
-        title="Phòng ban & chức vụ"
-        description="Toàn quyền tạo, sửa, khóa/mở phòng ban và chức vụ."
+        title="Phòng ban"
+        description="Toàn quyền tạo, sửa, khóa/mở phòng ban."
         action={
-          <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
-            <Tab value="departments">Phòng ban</Tab>
-            <Tab value="positions">Chức vụ</Tab>
-          </TabList>
+          <Button appearance="primary" icon={<AddRegular />} onClick={() => setDeptOpen(true)}>
+            Thêm phòng ban
+          </Button>
         }
       />
       {loading ? (
         <Spinner label="Đang tải..." />
-      ) : tab === "departments" ? (
-        <SectionPanel
-          title="Danh sách phòng ban"
-          action={
-            <Button appearance="primary" icon={<AddRegular />} onClick={() => setDeptOpen(true)}>
-              Thêm phòng ban
-            </Button>
-          }
-        >
+      ) : (
+        <SectionPanel title="Danh sách phòng ban">
           <div className="compact-list">
             {departments.map((d) => (
               <div className="compact-row" key={d.departmentCode}>
@@ -586,39 +524,6 @@ export function AdminOrganizationPage() {
                   </Badge>
                   <Button size="small" onClick={() => toggleDepartment(d)}>
                     {d.isActive ? "Khóa" : "Mở khóa"}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionPanel>
-      ) : (
-        <SectionPanel
-          title="Danh sách chức vụ"
-          action={
-            <Button appearance="primary" icon={<AddRegular />} onClick={openCreatePosition}>
-              Thêm chức vụ
-            </Button>
-          }
-        >
-          <div className="compact-list">
-            {positions.map((p) => (
-              <div className="compact-row" key={p.positionCode}>
-                <div>
-                  <strong>{p.positionName}</strong>
-                  <span>
-                    {p.positionCode} · Cấp {p.rankLevel} · {p.standardSalary ? formatCurrency(p.standardSalary) : "Chưa có lương chuẩn"}
-                  </span>
-                </div>
-                <div className="row-actions">
-                  <Badge appearance="tint" color={p.isActive ? "success" : "subtle"}>
-                    {p.isActive ? "Hoạt động" : "Ngừng"}
-                  </Badge>
-                  <Button size="small" onClick={() => openEditPosition(p)}>
-                    Sửa
-                  </Button>
-                  <Button size="small" onClick={() => togglePosition(p)}>
-                    {p.isActive ? "Khóa" : "Mở khóa"}
                   </Button>
                 </div>
               </div>
@@ -651,6 +556,139 @@ export function AdminOrganizationPage() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+    </div>
+  );
+}
+
+export function AdminPositionsPage() {
+  const notify = useNotify();
+  const [positions, setPositions] = useState<PositionDto[]>([]);
+  const [roles, setRoles] = useState<RoleDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [posOpen, setPosOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<PositionDto | null>(null);
+  const [posForm, setPosForm] = useState({ positionCode: "", positionName: "", description: "", rankLevel: "50", roleCode: "" });
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([positionApi.getAll(), roleApi.getAll()])
+      .then(([p, r]) => {
+        setPositions(p);
+        setRoles(r);
+      })
+      .catch((err) => notify({ ok: false, message: errorMessage(err) }))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openCreatePosition = () => {
+    setEditingPosition(null);
+    setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50", roleCode: roles[0]?.roleCode ?? "" });
+    setPosOpen(true);
+  };
+
+  const openEditPosition = (p: PositionDto) => {
+    setEditingPosition(p);
+    setPosForm({
+      positionCode: p.positionCode,
+      positionName: p.positionName,
+      description: p.description ?? "",
+      rankLevel: String(p.rankLevel),
+      roleCode: p.roleCode ?? roles[0]?.roleCode ?? "",
+    });
+    setPosOpen(true);
+  };
+
+  const submitPosition = async () => {
+    if (!posForm.positionCode.trim() || !posForm.positionName.trim()) {
+      notify({ ok: false, message: "Vui lòng nhập mã và tên chức vụ." });
+      return;
+    }
+    const rankLevel = Number(posForm.rankLevel);
+    if (!Number.isFinite(rankLevel)) {
+      notify({ ok: false, message: "Cấp bậc phải là một số." });
+      return;
+    }
+    if (!posForm.roleCode) {
+      notify({ ok: false, message: "Vui lòng chọn role cho chức vụ này." });
+      return;
+    }
+    try {
+      if (editingPosition) {
+        await positionApi.update(editingPosition.positionCode, {
+          positionName: posForm.positionName,
+          description: posForm.description,
+          rankLevel,
+          roleCode: posForm.roleCode,
+        });
+        notify({ ok: true, message: "Đã cập nhật chức vụ." });
+      } else {
+        await positionApi.create({ ...posForm, rankLevel });
+        notify({ ok: true, message: "Đã thêm chức vụ." });
+      }
+      setPosOpen(false);
+      setEditingPosition(null);
+      setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50", roleCode: roles[0]?.roleCode ?? "" });
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    }
+  };
+
+  const togglePosition = async (p: PositionDto) => {
+    try {
+      await positionApi.setActive(p.positionCode, !p.isActive);
+      notify({ ok: true, message: "Đã cập nhật trạng thái chức vụ." });
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    }
+  };
+
+  const roleName = (roleCode?: string) => roles.find((r) => r.roleCode === roleCode)?.roleName ?? roleCode ?? "Chưa gán role";
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        title="Chức vụ"
+        description="Toàn quyền tạo, sửa, khóa/mở chức vụ — mỗi chức vụ gắn với 1 role, dùng để tự điền role khi tạo tài khoản cho hồ sơ giữ chức vụ đó."
+        action={
+          <Button appearance="primary" icon={<AddRegular />} onClick={openCreatePosition}>
+            Thêm chức vụ
+          </Button>
+        }
+      />
+      {loading ? (
+        <Spinner label="Đang tải..." />
+      ) : (
+        <SectionPanel title="Danh sách chức vụ">
+          <div className="compact-list">
+            {positions.map((p) => (
+              <div className="compact-row" key={p.positionCode}>
+                <div>
+                  <strong>{p.positionName}</strong>
+                  <span>
+                    {p.positionCode} · Cấp {p.rankLevel} · Role: {roleName(p.roleCode)} ·{" "}
+                    {p.standardSalary ? formatCurrency(p.standardSalary) : "Chưa có lương chuẩn"}
+                  </span>
+                </div>
+                <div className="row-actions">
+                  <Badge appearance="tint" color={p.isActive ? "success" : "subtle"}>
+                    {p.isActive ? "Hoạt động" : "Ngừng"}
+                  </Badge>
+                  <Button size="small" onClick={() => openEditPosition(p)}>
+                    Sửa
+                  </Button>
+                  <Button size="small" onClick={() => togglePosition(p)}>
+                    {p.isActive ? "Khóa" : "Mở khóa"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionPanel>
+      )}
 
       <Dialog
         open={posOpen}
@@ -672,6 +710,24 @@ export function AdminOrganizationPage() {
               </Field>
               <Field label="Tên chức vụ" required>
                 <Input value={posForm.positionName} onChange={(_, data) => setPosForm((v) => ({ ...v, positionName: data.value }))} />
+              </Field>
+              <Field
+                label="Role"
+                required
+                hint="Role mặc định cho tài khoản của người giữ chức vụ này — tự điền khi Admin tạo tài khoản cho hồ sơ có chức vụ này."
+              >
+                <Dropdown
+                  value={roleName(posForm.roleCode)}
+                  selectedOptions={[posForm.roleCode]}
+                  onOptionSelect={(_, data) => setPosForm((v) => ({ ...v, roleCode: data.optionValue ?? "" }))}
+                >
+                  {roles.map((r) => (
+                    <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
+                      {r.roleName}
+                    </Option>
+                  ))}
+                </Dropdown>
+                {!roles.length ? <FieldError message="Chưa có role nào được cấu hình." /> : null}
               </Field>
               <Field label="Cấp bậc" hint="Số càng nhỏ càng cao cấp. Để hở khoảng cách (vd 10, 20, 30) để dễ chèn thêm chức vụ mới ở giữa.">
                 <Input

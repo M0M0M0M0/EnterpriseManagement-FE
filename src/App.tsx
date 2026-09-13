@@ -1,5 +1,5 @@
 import { Skeleton, SkeletonItem } from "@fluentui/react-components";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import {
@@ -9,6 +9,7 @@ import {
   ProfilePage,
 } from "./pages/CommonPages";
 import { LoginPage } from "./pages/LoginPage";
+import { menuApi } from "./services/api";
 import { useAuthStore } from "./store/useAuthStore";
 import type { UserRole } from "./types/domain";
 
@@ -56,8 +57,11 @@ const AdminUsersPage = lazy(() =>
 const AdminEmployeesPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminEmployeesPage })),
 );
-const AdminOrganizationPage = lazy(() =>
-  import("./pages/AdminPages").then((m) => ({ default: m.AdminOrganizationPage })),
+const AdminDepartmentsPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminDepartmentsPage })),
+);
+const AdminPositionsPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminPositionsPage })),
 );
 const AdminCustomersPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminCustomersPage })),
@@ -82,6 +86,39 @@ function RequireRole({ role, children }: { role: UserRole; children: ReactNode }
 function RequireAuth({ children }: { children: ReactNode }) {
   const currentRole = useAuthStore((state) => state.role);
   if (!currentRole) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// Audit Log là trang dùng chung cho toàn hệ thống, không thuộc riêng role nào: Admin luôn
+// xem được, Manager xem được khi Admin cấp permission "page.admin.audit" cho role MANAGER.
+// Vì vậy gate theo permission thực tế (menu trả về từ /api/menus/mine) thay vì so khớp role
+// cứng như RequireRole, để không phải tạo route/menu riêng cho từng role.
+function RequireMenuAccess({ route, children }: { route: string; children: ReactNode }) {
+  const session = useAuthStore((state) => state.session);
+  const currentRole = useAuthStore((state) => state.role);
+  const [status, setStatus] = useState<"loading" | "allowed" | "denied">("loading");
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    setStatus("loading");
+    menuApi
+      .getMine()
+      .then((menus) => {
+        if (cancelled) return;
+        setStatus(menus.some((menu) => menu.route === route) ? "allowed" : "denied");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("denied");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, route]);
+
+  if (!currentRole || !session) return <Navigate to="/login" replace />;
+  if (status === "loading") return null;
+  if (status === "denied") return <Navigate to="/403" replace />;
   return children;
 }
 
@@ -158,12 +195,22 @@ function App() {
         >
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/employees" element={<AdminEmployeesPage />} />
-          <Route path="/admin/organization" element={<AdminOrganizationPage />} />
+          <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+          <Route path="/admin/positions" element={<AdminPositionsPage />} />
           <Route path="/admin/customers" element={<AdminCustomersPage />} />
           <Route path="/admin/payroll" element={<AdminPayrollPage />} />
+          <Route path="/admin/system" element={<AdminSystemPage />} />
+        </Route>
+
+        <Route
+          element={
+            <RequireMenuAccess route="/admin/audit">
+              <AppShell />
+            </RequireMenuAccess>
+          }
+        >
           <Route path="/admin/audit" element={<AdminAuditLogPage />} />
           <Route path="/admin/audit-log" element={<Navigate to="/admin/audit" replace />} />
-          <Route path="/admin/system" element={<AdminSystemPage />} />
         </Route>
 
         <Route path="/" element={<Navigate to="/app" replace />} />

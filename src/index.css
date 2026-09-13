@@ -641,6 +641,35 @@ p {
   gap: 14px;
 }
 
+.permission-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.permission-group-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 4px 0 12px;
+}
+
+.permission-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.permission-group-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
+}
+
 .field-error {
   display: block;
   margin-top: 5px;
