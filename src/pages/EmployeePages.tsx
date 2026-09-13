@@ -79,9 +79,11 @@ export function EmployeeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [punching, setPunching] = useState(false);
 
+  // Chỉ hiện Spinner toàn trang ở lần tải đầu tiên. Các lần load lại sau (vd. sau khi
+  // chấm công) không được set loading=true nữa, để tránh unmount cả trang chỉ để refresh
+  // dữ liệu — nút chấm công tự có Spinner riêng (state `punching`) cho việc đó.
   const load = () => {
     if (!employeeCode) return;
-    setLoading(true);
     dashboardApi
       .employee(employeeCode)
       .then(setData)
@@ -199,9 +201,9 @@ export function EmployeeAttendancePage() {
   });
   const employeeCode = useEmployeeCode();
 
+  // Chỉ hiện Spinner toàn trang ở lần tải đầu tiên (xem EmployeeDashboardPage.load ở trên).
   const load = () => {
     if (!employeeCode) return;
-    setLoading(true);
     Promise.all([
       attendanceApi.getHistory(employeeCode),
       attendanceApi.getMyAdjustments(),

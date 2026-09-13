@@ -17,7 +17,7 @@ import {
 } from "@fluentui/react-components";
 import { AddRegular, CopyRegular, EyeOffRegular, EyeRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
-import { EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
+import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
 import {
   customerApi,
@@ -66,6 +66,10 @@ export function AdminEmployeesPage() {
   const [resettingUsername, setResettingUsername] = useState<string | null>(null);
   const [credential, setCredential] = useState<{ username: string; password: string } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [lockEmployeeTarget, setLockEmployeeTarget] = useState<EmployeeDto | null>(null);
+  const [lockingEmployee, setLockingEmployee] = useState(false);
+  const [lockAccountTarget, setLockAccountTarget] = useState<UserDto | null>(null);
+  const [lockingAccount, setLockingAccount] = useState(false);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -255,6 +259,19 @@ export function AdminEmployeesPage() {
     }
   };
 
+  // Cho nghỉ việc là hành động có rủi ro (khóa truy cập, ảnh hưởng chấm công/nghỉ phép của
+  // nhân viên) nên cần xác nhận trước — phục hồi lại thì bấm là chạy luôn.
+  const confirmLockEmployee = async () => {
+    if (!lockEmployeeTarget) return;
+    setLockingEmployee(true);
+    try {
+      await toggleActive(lockEmployeeTarget);
+      setLockEmployeeTarget(null);
+    } finally {
+      setLockingEmployee(false);
+    }
+  };
+
   const openCreateAccount = (employee: EmployeeDto) => {
     setAccountEmployee(employee);
     setAccountForm({ username: employee.employeeCode.toLowerCase(), email: employee.email ?? "" });
@@ -312,6 +329,17 @@ export function AdminEmployeesPage() {
       notify({ ok: false, message: errorMessage(err) });
     } finally {
       setTogglingUsername(null);
+    }
+  };
+
+  const confirmLockAccount = async () => {
+    if (!lockAccountTarget) return;
+    setLockingAccount(true);
+    try {
+      await toggleAccountActive(lockAccountTarget);
+      setLockAccountTarget(null);
+    } finally {
+      setLockingAccount(false);
     }
   };
 
@@ -421,7 +449,12 @@ export function AdminEmployeesPage() {
                       <Button size="small" onClick={() => openEdit(e)}>
                         Sửa
                       </Button>
-                      <Button size="small" onClick={() => toggleActive(e)}>
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          e.employmentStatus === "Active" ? setLockEmployeeTarget(e) : toggleActive(e)
+                        }
+                      >
                         {e.employmentStatus === "Active" ? "Khóa" : "Mở khóa"}
                       </Button>
                       {usersByEmployee[e.employeeCode]?.length ? (
@@ -668,7 +701,9 @@ export function AdminEmployeesPage() {
                             <Button
                               size="small"
                               disabled={togglingUsername === user.username}
-                              onClick={() => toggleAccountActive(user)}
+                              onClick={() =>
+                                user.isActive ? setLockAccountTarget(user) : toggleAccountActive(user)
+                              }
                             >
                               {togglingUsername === user.username ? (
                                 <Spinner size="tiny" />
@@ -702,6 +737,26 @@ export function AdminEmployeesPage() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+
+      <ConfirmDialog
+        open={lockEmployeeTarget !== null}
+        title="Cho nhân viên nghỉ việc?"
+        description={`Nhân viên "${lockEmployeeTarget?.fullName}" sẽ chuyển sang trạng thái Ngừng, không thể chấm công/xin nghỉ nữa cho đến khi được phục hồi lại.`}
+        confirmLabel="Cho nghỉ việc"
+        confirming={lockingEmployee}
+        onConfirm={confirmLockEmployee}
+        onCancel={() => setLockEmployeeTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={lockAccountTarget !== null}
+        title="Khóa tài khoản?"
+        description={`Tài khoản "${lockAccountTarget?.username}" sẽ không thể đăng nhập cho đến khi được mở khóa lại.`}
+        confirmLabel="Khóa tài khoản"
+        confirming={lockingAccount}
+        onConfirm={confirmLockAccount}
+        onCancel={() => setLockAccountTarget(null)}
+      />
     </div>
   );
 }
@@ -712,6 +767,8 @@ export function AdminDepartmentsPage() {
   const [loading, setLoading] = useState(true);
   const [deptOpen, setDeptOpen] = useState(false);
   const [deptForm, setDeptForm] = useState({ departmentCode: "", departmentName: "", description: "" });
+  const [lockDeptTarget, setLockDeptTarget] = useState<DepartmentDto | null>(null);
+  const [lockingDept, setLockingDept] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -750,6 +807,17 @@ export function AdminDepartmentsPage() {
     }
   };
 
+  const confirmLockDepartment = async () => {
+    if (!lockDeptTarget) return;
+    setLockingDept(true);
+    try {
+      await toggleDepartment(lockDeptTarget);
+      setLockDeptTarget(null);
+    } finally {
+      setLockingDept(false);
+    }
+  };
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -776,7 +844,10 @@ export function AdminDepartmentsPage() {
                   <Badge appearance="tint" color={d.isActive ? "success" : "subtle"}>
                     {d.isActive ? "Hoạt động" : "Ngừng"}
                   </Badge>
-                  <Button size="small" onClick={() => toggleDepartment(d)}>
+                  <Button
+                    size="small"
+                    onClick={() => (d.isActive ? setLockDeptTarget(d) : toggleDepartment(d))}
+                  >
                     {d.isActive ? "Khóa" : "Mở khóa"}
                   </Button>
                 </div>
@@ -810,6 +881,16 @@ export function AdminDepartmentsPage() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+
+      <ConfirmDialog
+        open={lockDeptTarget !== null}
+        title="Đóng phòng ban?"
+        description={`Phòng ban "${lockDeptTarget?.departmentName}" sẽ chuyển sang Ngừng hoạt động cho đến khi được mở lại.`}
+        confirmLabel="Đóng phòng ban"
+        confirming={lockingDept}
+        onConfirm={confirmLockDepartment}
+        onCancel={() => setLockDeptTarget(null)}
+      />
     </div>
   );
 }
@@ -822,6 +903,8 @@ export function AdminPositionsPage() {
   const [posOpen, setPosOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<PositionDto | null>(null);
   const [posForm, setPosForm] = useState({ positionCode: "", positionName: "", description: "", rankLevel: "50", roleCode: "" });
+  const [lockPosTarget, setLockPosTarget] = useState<PositionDto | null>(null);
+  const [lockingPos, setLockingPos] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -900,6 +983,17 @@ export function AdminPositionsPage() {
     }
   };
 
+  const confirmLockPosition = async () => {
+    if (!lockPosTarget) return;
+    setLockingPos(true);
+    try {
+      await togglePosition(lockPosTarget);
+      setLockPosTarget(null);
+    } finally {
+      setLockingPos(false);
+    }
+  };
+
   const roleName = (roleCode?: string) => roles.find((r) => r.roleCode === roleCode)?.roleName ?? roleCode ?? "Chưa gán role";
 
   return (
@@ -934,7 +1028,10 @@ export function AdminPositionsPage() {
                   <Button size="small" onClick={() => openEditPosition(p)}>
                     Sửa
                   </Button>
-                  <Button size="small" onClick={() => togglePosition(p)}>
+                  <Button
+                    size="small"
+                    onClick={() => (p.isActive ? setLockPosTarget(p) : togglePosition(p))}
+                  >
                     {p.isActive ? "Khóa" : "Mở khóa"}
                   </Button>
                 </div>
@@ -1003,6 +1100,16 @@ export function AdminPositionsPage() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+
+      <ConfirmDialog
+        open={lockPosTarget !== null}
+        title="Đóng chức vụ?"
+        description={`Chức vụ "${lockPosTarget?.positionName}" sẽ chuyển sang Ngừng hoạt động cho đến khi được mở lại.`}
+        confirmLabel="Đóng chức vụ"
+        confirming={lockingPos}
+        onConfirm={confirmLockPosition}
+        onCancel={() => setLockPosTarget(null)}
+      />
     </div>
   );
 }

@@ -18,6 +18,11 @@ export interface AuthSession {
   roles: string[];
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface EmployeeDto {
   employeeCode: string;
   fullName: string;

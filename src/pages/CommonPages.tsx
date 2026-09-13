@@ -1,6 +1,8 @@
 import { Badge, Button, Field, Input, Spinner } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
+  EyeOffRegular,
+  EyeRegular,
   InfoRegular,
   LockClosedRegular,
   SaveRegular,
@@ -14,11 +16,41 @@ import {
   SectionPanel,
 } from "../components/ui";
 import { useNotify } from "../components/useNotify";
-import { employeeApi } from "../services/api";
+import { authApi, employeeApi } from "../services/api";
 import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
 import type { EmployeeDto, UpdateEmployeeRequest } from "../types/domain";
 import { formatDate } from "../utils/format";
+
+// Input mật khẩu dùng chung cho form đổi mật khẩu: có icon con mắt ở cuối ô để bật/tắt hiện chữ.
+function PasswordInput({
+  value,
+  onChange,
+  autoComplete,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <Input
+      type={visible ? "text" : "password"}
+      value={value}
+      autoComplete={autoComplete}
+      onChange={(_, data) => onChange(data.value)}
+      contentAfter={
+        <Button
+          appearance="transparent"
+          size="small"
+          icon={visible ? <EyeOffRegular /> : <EyeRegular />}
+          aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+          onClick={() => setVisible((v) => !v)}
+        />
+      }
+    />
+  );
+}
 
 function homePathForRole(role: string | null) {
   if (role === "employee") return "/employee/dashboard";
@@ -263,7 +295,44 @@ export function ProfilePage() {
 
 export function AccountSettingsPage() {
   const session = useAuthStore((state) => state.session);
+  const notify = useNotify();
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [sending, setSending] = useState(false);
+
   if (!session) return null;
+
+  const submitPasswordChange = async () => {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      notify({ ok: false, message: "Vui lòng nhập đủ các trường." });
+      return;
+    }
+    if (passwordForm.newPassword.length < 8) {
+      notify({ ok: false, message: "Mật khẩu mới phải có ít nhất 8 ký tự." });
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      notify({ ok: false, message: "Mật khẩu mới nhập lại không khớp." });
+      return;
+    }
+    setSending(true);
+    try {
+      await authApi.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      notify({ ok: true, message: "Đã đổi mật khẩu." });
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -294,21 +363,29 @@ export function AccountSettingsPage() {
       </SectionPanel>
       <SectionPanel title="Đổi mật khẩu">
         <div className="form-stack">
-          <Field label="Mật khẩu hiện tại">
-            <Input type="password" disabled />
+          <Field label="Mật khẩu hiện tại" required>
+            <PasswordInput
+              value={passwordForm.currentPassword}
+              autoComplete="current-password"
+              onChange={(value) => setPasswordForm((v) => ({ ...v, currentPassword: value }))}
+            />
           </Field>
-          <Field label="Mật khẩu mới">
-            <Input type="password" disabled />
+          <Field label="Mật khẩu mới" required hint="Ít nhất 8 ký tự.">
+            <PasswordInput
+              value={passwordForm.newPassword}
+              autoComplete="new-password"
+              onChange={(value) => setPasswordForm((v) => ({ ...v, newPassword: value }))}
+            />
           </Field>
-          <div className="info-banner">
-            <InfoRegular />
-            <div>
-              <strong>Tính năng chưa khả dụng</strong>
-              <p>Backend chưa cung cấp API đổi mật khẩu. Chức năng sẽ được bật khi API sẵn sàng.</p>
-            </div>
-          </div>
-          <Button appearance="primary" disabled>
-            Đổi mật khẩu
+          <Field label="Nhập lại mật khẩu mới" required>
+            <PasswordInput
+              value={passwordForm.confirmPassword}
+              autoComplete="new-password"
+              onChange={(value) => setPasswordForm((v) => ({ ...v, confirmPassword: value }))}
+            />
+          </Field>
+          <Button appearance="primary" onClick={submitPasswordChange} disabled={sending}>
+            {sending ? <Spinner size="tiny" /> : "Đổi mật khẩu"}
           </Button>
         </div>
       </SectionPanel>

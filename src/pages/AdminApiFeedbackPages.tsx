@@ -24,7 +24,7 @@ import {
 } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { PermissionGroupEditor } from "../components/PermissionGroupEditor";
-import { EmptyState, PageHeader, SectionPanel } from "../components/ui";
+import { ConfirmDialog, EmptyState, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
 import { auditApi, menuApi, permissionApi, roleApi, userApi } from "../services/api";
 import { ApiError, errorMessage } from "../services/http";
@@ -64,6 +64,8 @@ export function AdminUsersApiPage() {
   );
   const [showPassword, setShowPassword] = useState(false);
   const [resettingUsername, setResettingUsername] = useState<string | null>(null);
+  const [lockTarget, setLockTarget] = useState<UserDto | null>(null);
+  const [locking, setLocking] = useState(false);
   const [userForm, setUserForm] = useState({
     username: "",
     email: "",
@@ -174,6 +176,20 @@ export function AdminUsersApiPage() {
     }
   };
 
+  // Khóa tài khoản chặn đăng nhập ngay lập tức nên cần xác nhận trước khi bấm nhầm — mở
+  // khóa không có rủi ro tương đương nên bấm là chạy luôn (xem toggleUserActive/onClick bên
+  // dưới, chỉ đi qua dialog này khi user.isActive === true).
+  const confirmLockUser = async () => {
+    if (!lockTarget) return;
+    setLocking(true);
+    try {
+      await toggleUserActive(lockTarget);
+      setLockTarget(null);
+    } finally {
+      setLocking(false);
+    }
+  };
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -220,7 +236,10 @@ export function AdminUsersApiPage() {
                         <Button size="small" onClick={() => openEditUser(user)}>
                           Sửa
                         </Button>
-                        <Button size="small" onClick={() => toggleUserActive(user)}>
+                        <Button
+                          size="small"
+                          onClick={() => (user.isActive ? setLockTarget(user) : toggleUserActive(user))}
+                        >
                           {user.isActive ? "Khóa" : "Mở khóa"}
                         </Button>
                         <Button
@@ -329,6 +348,16 @@ export function AdminUsersApiPage() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+
+      <ConfirmDialog
+        open={lockTarget !== null}
+        title="Khóa tài khoản?"
+        description={`Tài khoản "${lockTarget?.username}" sẽ không thể đăng nhập cho đến khi được mở khóa lại.`}
+        confirmLabel="Khóa tài khoản"
+        confirming={locking}
+        onConfirm={confirmLockUser}
+        onCancel={() => setLockTarget(null)}
+      />
     </div>
   );
 }

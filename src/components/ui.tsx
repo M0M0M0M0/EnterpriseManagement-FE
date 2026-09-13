@@ -1,4 +1,15 @@
-import { Badge, Button, type BadgeProps } from "@fluentui/react-components";
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Spinner,
+  type BadgeProps,
+} from "@fluentui/react-components";
 import { BoxRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 import { attendanceLabels, getInitials, requestLabels } from "../utils/format";
@@ -155,4 +166,46 @@ export function FieldError({ message }: { message?: string }) {
       {message}
     </span>
   ) : null;
+}
+
+// Xác nhận trước các hành động khóa (nghỉ việc, đóng phòng ban/chức vụ, khóa tài khoản) —
+// hành động chặn truy cập/ngừng hoạt động nên cần 1 bước xác nhận để tránh bấm nhầm. Mở
+// khóa/kích hoạt lại không cần xác nhận vì không có rủi ro tương đương.
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "Xác nhận",
+  cancelLabel = "Hủy",
+  confirming = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  description: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  confirming?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(_, data) => !data.open && onCancel()}>
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogContent>{description}</DialogContent>
+          <DialogActions>
+            <Button appearance="secondary" onClick={onCancel} disabled={confirming}>
+              {cancelLabel}
+            </Button>
+            <Button appearance="primary" onClick={onConfirm} disabled={confirming}>
+              {confirming ? <Spinner size="tiny" /> : confirmLabel}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
+  );
 }

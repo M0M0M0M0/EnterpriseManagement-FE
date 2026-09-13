@@ -3,6 +3,7 @@ import type {
   AttendanceAdjustmentDto,
   AttendanceRecordDto,
   AuthSession,
+  ChangePasswordRequest,
   CreateCustomerRequest,
   CreateDepartmentRequest,
   CreateEmployeeRequest,
@@ -45,6 +46,8 @@ import type {
 export const authApi = {
   login: (username: string, password: string) =>
     http.post<AuthSession & { token: string }>("/auth/login", { username, password }),
+  changePassword: (request: ChangePasswordRequest) =>
+    http.post<void>("/auth/change-password", request),
 };
 
 export const dashboardApi = {
