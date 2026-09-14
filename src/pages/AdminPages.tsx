@@ -149,6 +149,8 @@ export function AdminEmployeesPage() {
     setManagerQuery(currentManager ? managerLabel(currentManager) : "");
     setForm((v) => ({
       ...v,
+      firstName: employee.firstName,
+      lastName: employee.lastName,
       phone: employee.phone ?? "",
       address: employee.address ?? "",
       departmentCode: employee.departmentCode,
@@ -218,7 +220,7 @@ export function AdminEmployeesPage() {
       notify({ ok: false, message: "Vui lòng chọn phòng ban và chức vụ." });
       return;
     }
-    if (!editing && (!form.firstName.trim() || !form.lastName.trim())) {
+    if (!form.firstName.trim() || !form.lastName.trim()) {
       notify({ ok: false, message: "Vui lòng nhập đủ họ tên." });
       return;
     }
@@ -226,6 +228,8 @@ export function AdminEmployeesPage() {
     try {
       if (editing) {
         await employeeApi.update(editing.employeeCode, {
+          firstName: form.firstName,
+          lastName: form.lastName,
           phone: form.phone || undefined,
           address: form.address || undefined,
           departmentCode: form.departmentCode,
@@ -520,20 +524,18 @@ export function AdminEmployeesPage() {
           <DialogBody>
             <DialogTitle>{editing ? `Sửa hồ sơ: ${editing.fullName}` : "Thêm nhân viên mới"}</DialogTitle>
             <DialogContent className="form-stack">
+              <div className="form-grid">
+                <Field label="Họ" required>
+                  <Input value={form.lastName} onChange={(_, data) => setForm((v) => ({ ...v, lastName: data.value }))} />
+                </Field>
+                <Field label="Tên" required>
+                  <Input value={form.firstName} onChange={(_, data) => setForm((v) => ({ ...v, firstName: data.value }))} />
+                </Field>
+              </div>
               {!editing ? (
-                <>
-                  <div className="form-grid">
-                    <Field label="Họ" required>
-                      <Input value={form.lastName} onChange={(_, data) => setForm((v) => ({ ...v, lastName: data.value }))} />
-                    </Field>
-                    <Field label="Tên" required>
-                      <Input value={form.firstName} onChange={(_, data) => setForm((v) => ({ ...v, firstName: data.value }))} />
-                    </Field>
-                  </div>
-                  <Field label="Email">
-                    <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
-                  </Field>
-                </>
+                <Field label="Email">
+                  <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
+                </Field>
               ) : null}
               <div className="form-grid">
                 <Field label="Điện thoại">
@@ -899,6 +901,9 @@ export function AdminDepartmentsPage() {
   );
 }
 
+// Sentinel cho lựa chọn "+ Tạo role mới" trong Dropdown chọn Role lúc tạo/sửa chức vụ.
+const NEW_ROLE_OPTION = "__new_role__";
+
 export function AdminPositionsPage() {
   const notify = useNotify();
   const [positions, setPositions] = useState<PositionDto[]>([]);
@@ -906,7 +911,15 @@ export function AdminPositionsPage() {
   const [loading, setLoading] = useState(true);
   const [posOpen, setPosOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<PositionDto | null>(null);
-  const [posForm, setPosForm] = useState({ positionCode: "", positionName: "", description: "", rankLevel: "50", roleCode: "" });
+  const [posForm, setPosForm] = useState({
+    positionCode: "",
+    positionName: "",
+    description: "",
+    rankLevel: "50",
+    roleCode: "",
+    newRoleCode: "",
+    newRoleName: "",
+  });
   const [lockPosTarget, setLockPosTarget] = useState<PositionDto | null>(null);
   const [lockingPos, setLockingPos] = useState(false);
 
@@ -923,15 +936,26 @@ export function AdminPositionsPage() {
 
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const emptyPosForm = {
+    positionCode: "",
+    positionName: "",
+    description: "",
+    rankLevel: "50",
+    roleCode: "",
+    newRoleCode: "",
+    newRoleName: "",
+  };
+
   const openCreatePosition = () => {
     setEditingPosition(null);
-    setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50", roleCode: roles[0]?.roleCode ?? "" });
+    setPosForm({ ...emptyPosForm, roleCode: roles[0]?.roleCode ?? "" });
     setPosOpen(true);
   };
 
   const openEditPosition = (p: PositionDto) => {
     setEditingPosition(p);
     setPosForm({
+      ...emptyPosForm,
       positionCode: p.positionCode,
       positionName: p.positionName,
       description: p.description ?? "",
@@ -940,6 +964,8 @@ export function AdminPositionsPage() {
     });
     setPosOpen(true);
   };
+
+  const isNewRole = posForm.roleCode === NEW_ROLE_OPTION;
 
   const submitPosition = async () => {
     if (!posForm.positionCode.trim() || !posForm.positionName.trim()) {
@@ -955,22 +981,33 @@ export function AdminPositionsPage() {
       notify({ ok: false, message: "Vui lòng chọn role cho chức vụ này." });
       return;
     }
+    if (isNewRole && (!posForm.newRoleCode.trim() || !posForm.newRoleName.trim())) {
+      notify({ ok: false, message: "Vui lòng nhập đủ mã và tên role mới." });
+      return;
+    }
     try {
+      // Tạo role trống trước (chưa gán permission gì) — Admin cấu hình permission cho role
+      // này sau ở trang "User / Role / Permission", tránh phải nhồi cả bảng chọn permission
+      // vào ngay dialog tạo chức vụ này.
+      const roleCode = isNewRole
+        ? (await roleApi.create({ roleCode: posForm.newRoleCode, roleName: posForm.newRoleName, permissions: [] })).roleCode
+        : posForm.roleCode;
+
       if (editingPosition) {
         await positionApi.update(editingPosition.positionCode, {
           positionName: posForm.positionName,
           description: posForm.description,
           rankLevel,
-          roleCode: posForm.roleCode,
+          roleCode,
         });
         notify({ ok: true, message: "Đã cập nhật chức vụ." });
       } else {
-        await positionApi.create({ ...posForm, rankLevel });
+        await positionApi.create({ ...posForm, roleCode, rankLevel });
         notify({ ok: true, message: "Đã thêm chức vụ." });
       }
       setPosOpen(false);
       setEditingPosition(null);
-      setPosForm({ positionCode: "", positionName: "", description: "", rankLevel: "50", roleCode: roles[0]?.roleCode ?? "" });
+      setPosForm({ ...emptyPosForm, roleCode: roles[0]?.roleCode ?? "" });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -1072,7 +1109,7 @@ export function AdminPositionsPage() {
                 hint="Role mặc định cho tài khoản của người giữ chức vụ này — tự điền khi Admin tạo tài khoản cho hồ sơ có chức vụ này."
               >
                 <Dropdown
-                  value={roleName(posForm.roleCode)}
+                  value={isNewRole ? "+ Tạo role mới" : roleName(posForm.roleCode)}
                   selectedOptions={[posForm.roleCode]}
                   onOptionSelect={(_, data) => setPosForm((v) => ({ ...v, roleCode: data.optionValue ?? "" }))}
                 >
@@ -1081,9 +1118,28 @@ export function AdminPositionsPage() {
                       {r.roleName}
                     </Option>
                   ))}
+                  <Option key={NEW_ROLE_OPTION} value={NEW_ROLE_OPTION}>
+                    + Tạo role mới
+                  </Option>
                 </Dropdown>
                 {!roles.length ? <FieldError message="Chưa có role nào được cấu hình." /> : null}
               </Field>
+              {isNewRole ? (
+                <div className="form-grid">
+                  <Field label="Mã role mới" required>
+                    <Input
+                      value={posForm.newRoleCode}
+                      onChange={(_, data) => setPosForm((v) => ({ ...v, newRoleCode: data.value.toUpperCase() }))}
+                    />
+                  </Field>
+                  <Field label="Tên role mới" required hint="Chưa gán permission nào — cấu hình sau ở trang User / Role / Permission.">
+                    <Input
+                      value={posForm.newRoleName}
+                      onChange={(_, data) => setPosForm((v) => ({ ...v, newRoleName: data.value }))}
+                    />
+                  </Field>
+                </div>
+              ) : null}
               <Field label="Cấp bậc" hint="Số càng nhỏ càng cao cấp. Để hở khoảng cách (vd 10, 20, 30) để dễ chèn thêm chức vụ mới ở giữa.">
                 <Input
                   type="number"
@@ -1169,17 +1225,6 @@ export function AdminCustomersPage() {
       ) : (
         <EmptyState title="Chưa có khách hàng" description="Danh sách sẽ cập nhật khi có khách hàng mới." />
       )}
-      <SectionPanel title="Gộp khách hàng trùng lặp">
-        <div className="info-banner">
-          <Badge appearance="tint" color="informative">
-            Chưa khả dụng
-          </Badge>
-          <div>
-            <strong>Backend chưa có API merge khách hàng</strong>
-            <p>Chức năng gộp khách hàng trùng lặp sẽ được bật khi backend bổ sung API tương ứng.</p>
-          </div>
-        </div>
-      </SectionPanel>
     </div>
   );
 }

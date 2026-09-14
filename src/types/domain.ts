@@ -25,6 +25,8 @@ export interface ChangePasswordRequest {
 
 export interface EmployeeDto {
   employeeCode: string;
+  firstName: string;
+  lastName: string;
   fullName: string;
   email?: string;
   phone?: string;
@@ -55,6 +57,8 @@ export interface CreateEmployeeRequest {
 }
 
 export interface UpdateEmployeeRequest {
+  firstName: string;
+  lastName: string;
   phone?: string;
   address?: string;
   departmentCode: string;
