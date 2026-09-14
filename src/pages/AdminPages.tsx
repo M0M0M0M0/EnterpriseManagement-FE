@@ -1232,23 +1232,34 @@ export function AdminCustomersPage() {
 // Admin xem/duyệt toàn bộ Sale trong hệ thống — backend đã có sẵn logic bypass cho ADMIN
 // (SaleService.FilterByTeamAsync), nên chỉ cần trang UI dùng chung API /sales/*, không cần
 // endpoint riêng. Cấu trúc gần giống ManagerSalesPage nhưng phạm vi toàn công ty thay vì team.
+const emptySaleFilters = {
+  departmentCode: "",
+  approver: "",
+  submitter: "",
+  customer: "",
+  saleCode: "",
+};
+
 export function AdminSalesPage() {
   const notify = useNotify();
   const [pending, setPending] = useState<SaleDto[]>([]);
   const [history, setHistory] = useState<SaleDto[]>([]);
+  const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [tab, setTab] = useState("pending");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [rejectTarget, setRejectTarget] = useState<SaleDto | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejecting, setRejecting] = useState(false);
+  const [filters, setFilters] = useState(emptySaleFilters);
 
   const load = () => {
     setLoading(true);
-    Promise.all([saleApi.getPending(), saleApi.getHistory()])
-      .then(([p, h]) => {
+    Promise.all([saleApi.getPending(), saleApi.getHistory(), departmentApi.getAll()])
+      .then(([p, h, d]) => {
         setPending(p);
         setHistory(h);
+        setDepartments(d);
       })
       .catch((err) => notify({ ok: false, message: errorMessage(err) }))
       .finally(() => setLoading(false));
@@ -1293,7 +1304,34 @@ export function AdminSalesPage() {
     }
   };
 
-  const list = tab === "pending" ? pending : history;
+  const rawList = tab === "pending" ? pending : history;
+
+  // Lọc phía client trên danh sách đã tải — quy mô công ty nội bộ, không cần filter ở backend.
+  const list = rawList.filter((sale) => {
+    if (filters.departmentCode && sale.departmentCode !== filters.departmentCode) return false;
+    if (filters.approver && !(sale.approverName ?? "").toLowerCase().includes(filters.approver.toLowerCase())) {
+      return false;
+    }
+    if (
+      filters.submitter &&
+      !`${sale.employeeName} ${sale.employeeCode}`.toLowerCase().includes(filters.submitter.toLowerCase())
+    ) {
+      return false;
+    }
+    if (
+      filters.customer &&
+      !`${sale.customerCode} ${sale.customerPhone ?? ""}`.toLowerCase().includes(filters.customer.toLowerCase())
+    ) {
+      return false;
+    }
+    if (filters.saleCode && !sale.saleCode.toLowerCase().includes(filters.saleCode.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
+
+  const hasActiveFilters = Object.values(filters).some((v) => v.trim() !== "");
+
   const approvedRevenue = history
     .filter((s) => s.status === "Confirmed" || s.status === "Completed")
     .reduce((sum, s) => sum + s.amount, 0);
@@ -1316,6 +1354,60 @@ export function AdminSalesPage() {
           { label: "Sale chờ duyệt", value: pending.length, tone: pending.length ? "warning" : "success" },
         ]}
       />
+
+      <SectionPanel title="Bộ lọc">
+        <div className="form-grid">
+          <Field label="Phòng ban">
+            <Dropdown
+              value={departments.find((d) => d.departmentCode === filters.departmentCode)?.departmentName ?? "Tất cả"}
+              selectedOptions={[filters.departmentCode]}
+              onOptionSelect={(_, data) => setFilters((v) => ({ ...v, departmentCode: data.optionValue ?? "" }))}
+            >
+              <Option key="" value="">
+                Tất cả
+              </Option>
+              {departments.map((d) => (
+                <Option key={d.departmentCode} value={d.departmentCode} text={d.departmentName}>
+                  {d.departmentName}
+                </Option>
+              ))}
+            </Dropdown>
+          </Field>
+          <Field label="Người duyệt">
+            <Input
+              value={filters.approver}
+              placeholder="Tên người duyệt..."
+              onChange={(_, data) => setFilters((v) => ({ ...v, approver: data.value }))}
+            />
+          </Field>
+          <Field label="Người nộp">
+            <Input
+              value={filters.submitter}
+              placeholder="Tên hoặc mã NV..."
+              onChange={(_, data) => setFilters((v) => ({ ...v, submitter: data.value }))}
+            />
+          </Field>
+          <Field label="Khách hàng">
+            <Input
+              value={filters.customer}
+              placeholder="SĐT hoặc mã khách hàng..."
+              onChange={(_, data) => setFilters((v) => ({ ...v, customer: data.value }))}
+            />
+          </Field>
+          <Field label="Mã sale">
+            <Input
+              value={filters.saleCode}
+              onChange={(_, data) => setFilters((v) => ({ ...v, saleCode: data.value }))}
+            />
+          </Field>
+        </div>
+        {hasActiveFilters ? (
+          <Button size="small" onClick={() => setFilters(emptySaleFilters)}>
+            Xoá bộ lọc
+          </Button>
+        ) : null}
+      </SectionPanel>
+
       {loading ? (
         <Spinner label="Đang tải..." />
       ) : list.length ? (
@@ -1325,7 +1417,9 @@ export function AdminSalesPage() {
               <div>
                 <strong>{sale.employeeName}</strong>
                 <span>
-                  {sale.customerName} · {formatCurrency(sale.amount)} · {formatDate(sale.orderDate)}
+                  {sale.saleCode} · {sale.departmentName} · {sale.customerName} · {formatCurrency(sale.amount)} ·{" "}
+                  {formatDate(sale.orderDate)}
+                  {sale.approverName ? ` · Duyệt bởi ${sale.approverName}` : ""}
                 </span>
                 {sale.note ? <p>{sale.note}</p> : null}
                 {sale.rejectionReason ? <p>Lý do từ chối: {sale.rejectionReason}</p> : null}

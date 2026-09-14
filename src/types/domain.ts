@@ -218,13 +218,17 @@ export interface SaleDto {
   saleCode: string;
   customerCode: string;
   customerName: string;
+  customerPhone?: string;
   employeeCode: string;
   employeeName: string;
+  departmentCode: string;
+  departmentName: string;
   amount: number;
   orderDate: string;
   status: string;
   note?: string;
   rejectionReason?: string;
+  approverEmployeeCode?: string;
   approverName?: string;
   approvedAt?: string;
 }
