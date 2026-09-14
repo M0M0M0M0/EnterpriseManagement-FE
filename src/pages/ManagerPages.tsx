@@ -777,6 +777,7 @@ function attendanceBadgeColor(status: string): "success" | "warning" | "danger" 
     case "HalfDay":
       return "warning";
     case "Absent":
+    case "HalfDayAbsent":
       return "danger";
     case "OnLeave":
       return "informative";

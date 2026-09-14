@@ -18,6 +18,7 @@ const attendanceColors: Record<string, BadgeProps["color"]> = {
   Present: "success",
   Late: "warning",
   HalfDay: "warning",
+  HalfDayAbsent: "danger",
   Absent: "danger",
   OnLeave: "informative",
 };

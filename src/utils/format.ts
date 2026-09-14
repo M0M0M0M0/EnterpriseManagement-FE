@@ -45,6 +45,7 @@ export const attendanceLabels: Record<string, string> = {
   Present: "Đúng giờ",
   Late: "Đi muộn",
   HalfDay: "Nửa ngày",
+  HalfDayAbsent: "Vắng nửa buổi sáng",
   Absent: "Vắng mặt",
   OnLeave: "Nghỉ phép",
 };
