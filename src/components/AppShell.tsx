@@ -62,7 +62,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/manager/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
   ],
   admin: [
-    { to: "/admin/users", label: "Quản lý tài khoản", icon: <ShieldRegular />, end: true },
+    { to: "/admin/users", label: "Tài khoản", icon: <ShieldRegular />, end: true },
     { to: "/admin/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
     { to: "/admin/departments", label: "Phòng ban", icon: <BuildingRegular /> },
     { to: "/admin/positions", label: "Chức vụ", icon: <PersonRegular /> },
