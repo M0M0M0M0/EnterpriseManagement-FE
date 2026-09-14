@@ -14,6 +14,7 @@ import {
   TabList,
   Textarea,
 } from "@fluentui/react-components";
+import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import {
   EmptyState,
@@ -43,10 +44,12 @@ import type {
   EmployeeDto,
   LeaveRequestDto,
   ManagerDashboardDto,
+  OrgTreeNodeDto,
   PositionDto,
   SaleDto,
 } from "../types/domain";
 import {
+  attendanceLabels,
   formatCurrency,
   formatDate,
   formatDateTime,
@@ -715,6 +718,106 @@ export function ManagerOrganizationPage() {
           </div>
         </SectionPanel>
       </div>
+    </div>
+  );
+}
+
+function OrgTreeNodeRow({ node, depth }: { node: OrgTreeNodeDto; depth: number }) {
+  const [expanded, setExpanded] = useState(depth === 0);
+  const hasChildren = node.subordinates.length > 0;
+
+  return (
+    <div className="org-tree-branch">
+      <div className="compact-row org-tree-row" style={{ paddingLeft: depth * 24 }}>
+        <div className="org-tree-row-main">
+          {hasChildren ? (
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={expanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+              onClick={() => setExpanded((v) => !v)}
+              aria-label={expanded ? "Thu gọn" : "Mở rộng"}
+            />
+          ) : (
+            <span className="org-tree-leaf-spacer" />
+          )}
+          <div>
+            <strong>{node.fullName}</strong>
+            <span>
+              {node.positionName} · {node.departmentName}
+              {hasChildren ? ` · Quản lý ${node.subordinateCount} người` : ""}
+            </span>
+          </div>
+        </div>
+        <div className="org-tree-row-meta">
+          <Badge appearance="tint" color={attendanceBadgeColor(node.todayAttendanceStatus)}>
+            {attendanceLabels[node.todayAttendanceStatus] ?? "Chưa chấm công"}
+          </Badge>
+          {node.monthlyRevenue > 0 ? (
+            <span className="org-tree-revenue">{formatCurrency(node.monthlyRevenue)}</span>
+          ) : null}
+        </div>
+      </div>
+      {hasChildren && expanded ? (
+        <div>
+          {node.subordinates.map((child) => (
+            <OrgTreeNodeRow key={child.employeeCode} node={child} depth={depth + 1} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function attendanceBadgeColor(status: string): "success" | "warning" | "danger" | "informative" | "subtle" {
+  switch (status) {
+    case "Present":
+      return "success";
+    case "Late":
+    case "HalfDay":
+      return "warning";
+    case "Absent":
+      return "danger";
+    case "OnLeave":
+      return "informative";
+    default:
+      return "subtle";
+  }
+}
+
+export function ManagerOrgTreePage() {
+  const notify = useNotify();
+  const [tree, setTree] = useState<OrgTreeNodeDto[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    employeeApi
+      .getOrgTree()
+      .then(setTree)
+      .catch((err) => notify({ ok: false, message: errorMessage(err) }))
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading) return <Spinner label="Đang tải cây tổ chức..." />;
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        title="Cây tổ chức"
+        description="Xem các team bên dưới bạn, ai quản lý từng team, thành viên, doanh số tháng này và chấm công hôm nay."
+      />
+      <SectionPanel>
+        {!tree || tree.length === 0 ? (
+          <EmptyState title="Chưa có ai bên dưới bạn" description="Bạn hiện chưa quản lý trực tiếp nhân viên nào." />
+        ) : (
+          <div className="compact-list org-tree">
+            {tree.map((node) => (
+              <OrgTreeNodeRow key={node.employeeCode} node={node} depth={0} />
+            ))}
+          </div>
+        )}
+      </SectionPanel>
     </div>
   );
 }

@@ -49,6 +49,9 @@ const ManagerCustomersPage = lazy(() =>
 const ManagerOrganizationPage = lazy(() =>
   import("./pages/ManagerPages").then((m) => ({ default: m.ManagerOrganizationPage })),
 );
+const ManagerOrgTreePage = lazy(() =>
+  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerOrgTreePage })),
+);
 
 const AdminUsersPage = lazy(() =>
   import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminUsersApiPage })),
@@ -164,6 +167,7 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/manager/sales", element: <ManagerSalesPage /> },
   { path: "/manager/customers", element: <ManagerCustomersPage /> },
   { path: "/manager/organization", element: <ManagerOrganizationPage /> },
+  { path: "/manager/org-tree", element: <ManagerOrgTreePage /> },
   { path: "/manager/kpi-commission", element: <ManagerKpiCommissionPage /> },
   { path: "/employee/commission", element: <EmployeeCommissionPage /> },
   { path: "/admin/users", element: <AdminUsersPage /> },

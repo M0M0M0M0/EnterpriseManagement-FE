@@ -926,6 +926,45 @@ p {
   white-space: nowrap;
 }
 
+.org-tree-branch {
+  min-width: 0;
+}
+
+.org-tree-row {
+  border-bottom: 1px solid #e7ecf3;
+}
+
+.org-tree-row-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.org-tree-row-main > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.org-tree-leaf-spacer {
+  display: inline-block;
+  width: 32px;
+}
+
+.org-tree-row-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.org-tree-revenue {
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .employee-avatar {
   flex: 0 0 auto;
   display: inline-grid;

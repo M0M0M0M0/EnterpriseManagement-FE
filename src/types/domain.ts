@@ -470,3 +470,15 @@ export interface CalculateCommissionRequest {
   periodStartDate: string;
   periodEndDate: string;
 }
+
+export interface OrgTreeNodeDto {
+  employeeCode: string;
+  fullName: string;
+  positionName: string;
+  departmentName: string;
+  employmentStatus: string;
+  todayAttendanceStatus: string;
+  monthlyRevenue: number;
+  subordinateCount: number;
+  subordinates: OrgTreeNodeDto[];
+}

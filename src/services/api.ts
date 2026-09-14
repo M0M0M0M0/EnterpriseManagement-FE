@@ -29,6 +29,7 @@ import type {
   LeaveTypeDto,
   ManagerDashboardDto,
   MenuDto,
+  OrgTreeNodeDto,
   PermissionDto,
   PositionDto,
   RejectSaleRequest,
@@ -76,6 +77,7 @@ export const employeeApi = {
     http.put<EmployeeDto>(`/employees/${employeeCode}`, request),
   setActive: (employeeCode: string, isActive: boolean) =>
     http.put<EmployeeDto>(`/employees/${employeeCode}/active`, { isActive }),
+  getOrgTree: () => http.get<OrgTreeNodeDto[]>("/employees/org-tree"),
 };
 
 export const departmentApi = {
