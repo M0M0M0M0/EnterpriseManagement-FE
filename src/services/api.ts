@@ -71,6 +71,8 @@ export const employeeApi = {
     http.get<EmployeeDto>(`/employees/${employeeCode}`),
   getTeam: (managerEmployeeCode: string) =>
     http.get<EmployeeDto[]>(`/employees/team/${managerEmployeeCode}`),
+  getTeamRecursive: (managerEmployeeCode: string) =>
+    http.get<EmployeeDto[]>(`/employees/team/${managerEmployeeCode}/all`),
   create: (request: CreateEmployeeRequest) =>
     http.post<EmployeeDto>("/employees", request),
   update: (employeeCode: string, request: UpdateEmployeeRequest) =>

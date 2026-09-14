@@ -129,7 +129,7 @@ export function ManagerEmployeesPage() {
     if (!managerCode) return;
     setLoading(true);
     employeeApi
-      .getTeam(managerCode)
+      .getTeamRecursive(managerCode)
       .then(setEmployees)
       .catch((err) => notify({ ok: false, message: errorMessage(err) }))
       .finally(() => setLoading(false));
@@ -137,7 +137,10 @@ export function ManagerEmployeesPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Nhân viên của tôi" description="Danh sách nhân viên thuộc team (chỉ xem)." />
+      <PageHeader
+        title="Nhân viên của tôi"
+        description="Toàn bộ nhân viên thuộc quyền quản lý của bạn, kể cả người do nhân viên dưới bạn quản lý (chỉ xem)."
+      />
       {loading ? (
         <Spinner label="Đang tải..." />
       ) : employees.length ? (
@@ -149,6 +152,7 @@ export function ManagerEmployeesPage() {
                 <th>Họ tên</th>
                 <th>Chức vụ</th>
                 <th>Phòng ban</th>
+                <th>Quản lý trực tiếp</th>
                 <th>Email</th>
                 <th>Trạng thái</th>
               </tr>
@@ -160,6 +164,7 @@ export function ManagerEmployeesPage() {
                   <td>{e.fullName}</td>
                   <td>{e.positionName}</td>
                   <td>{e.departmentName}</td>
+                  <td>{e.managerName ?? "--"}</td>
                   <td>{e.email ?? "--"}</td>
                   <td>
                     <Badge appearance="tint" color={e.employmentStatus === "Active" ? "success" : "subtle"}>

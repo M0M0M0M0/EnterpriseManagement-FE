@@ -38,6 +38,7 @@ export interface EmployeeDto {
   positionCode: string;
   positionName: string;
   managerCode?: string;
+  managerName?: string;
   employmentStatus: string;
   hireDate: string;
 }
