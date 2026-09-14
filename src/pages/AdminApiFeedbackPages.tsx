@@ -72,6 +72,7 @@ export function AdminUsersApiPage() {
     roleCodes: "EMPLOYEE",
     employeeCode: "",
   });
+  const [filters, setFilters] = useState({ employeeCode: "", employeeName: "" });
 
   const loadUsers = () => {
     setLoadingUsers(true);
@@ -83,6 +84,17 @@ export function AdminUsersApiPage() {
   };
 
   useEffect(loadUsers, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasActiveFilters = Boolean(filters.employeeCode || filters.employeeName);
+  const filteredUsers = users.filter((user) => {
+    if (filters.employeeCode && !(user.employeeCode ?? "").toLowerCase().includes(filters.employeeCode.toLowerCase())) {
+      return false;
+    }
+    if (filters.employeeName && !(user.employeeName ?? "").toLowerCase().includes(filters.employeeName.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
 
   const openCreateUser = () => {
     setEditingUser(null);
@@ -202,9 +214,35 @@ export function AdminUsersApiPage() {
         }
       />
 
+      <SectionPanel
+        title="Bộ lọc"
+        action={
+          hasActiveFilters ? (
+            <Button size="small" onClick={() => setFilters({ employeeCode: "", employeeName: "" })}>
+              Xoá bộ lọc
+            </Button>
+          ) : undefined
+        }
+      >
+        <div className="form-grid">
+          <Field label="Mã nhân viên">
+            <Input
+              value={filters.employeeCode}
+              onChange={(_, data) => setFilters((value) => ({ ...value, employeeCode: data.value }))}
+            />
+          </Field>
+          <Field label="Tên nhân viên">
+            <Input
+              value={filters.employeeName}
+              onChange={(_, data) => setFilters((value) => ({ ...value, employeeName: data.value }))}
+            />
+          </Field>
+        </div>
+      </SectionPanel>
+
       {loadingUsers ? (
           <Spinner label="Đang tải..." />
-        ) : users.length ? (
+        ) : filteredUsers.length ? (
           <div className="enterprise-table-wrap">
             <table className="enterprise-table">
               <thead>
@@ -212,6 +250,7 @@ export function AdminUsersApiPage() {
                   <th>Tên đăng nhập</th>
                   <th>Email</th>
                   <th>Mã NV</th>
+                  <th>Tên nhân viên</th>
                   <th>Vai trò</th>
                   <th>Đăng nhập gần nhất</th>
                   <th>Trạng thái</th>
@@ -219,11 +258,12 @@ export function AdminUsersApiPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {filteredUsers.map((user) => (
                   <tr key={user.username}>
                     <td>{user.username}</td>
                     <td>{user.email}</td>
                     <td>{user.employeeCode ?? "--"}</td>
+                    <td>{user.employeeName ?? "--"}</td>
                     <td>{user.roles.join(", ")}</td>
                     <td>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "--"}</td>
                     <td>
@@ -257,6 +297,8 @@ export function AdminUsersApiPage() {
               </tbody>
             </table>
           </div>
+        ) : hasActiveFilters ? (
+          <EmptyState title="Không có tài khoản phù hợp" description="Thử điều chỉnh lại bộ lọc." />
         ) : (
           <EmptyState title="Chưa có tài khoản" description="Tạo tài khoản đầu tiên cho hệ thống." />
         )}

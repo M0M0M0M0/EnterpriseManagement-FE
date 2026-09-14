@@ -279,6 +279,7 @@ export interface UserDto {
   username: string;
   email: string;
   employeeCode?: string;
+  employeeName?: string;
   roles: string[];
   isActive: boolean;
   lastLoginAt?: string;
