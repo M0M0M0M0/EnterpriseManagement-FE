@@ -7,8 +7,10 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Dropdown,
   Field,
   Input,
+  Option,
   Spinner,
   Switch,
   Tab,
@@ -24,11 +26,22 @@ import {
 } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { PermissionGroupEditor } from "../components/PermissionGroupEditor";
-import { ConfirmDialog, EmptyState, PageHeader, SectionPanel } from "../components/ui";
+import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
 import { auditApi, menuApi, permissionApi, roleApi, userApi } from "../services/api";
 import { ApiError, errorMessage } from "../services/http";
 import type { AuditLogDto, MenuDto, PermissionDto, RoleDto, UserDto } from "../types/domain";
+
+function useAllRoles() {
+  const notify = useNotify();
+  const [roles, setRoles] = useState<RoleDto[]>([]);
+
+  useEffect(() => {
+    roleApi.getAll().then(setRoles).catch((err) => notify({ ok: false, message: errorMessage(err) }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return roles;
+}
 import { formatDateTime } from "../utils/format";
 
 type AdminSystemTab = "menus" | "roles" | "permissions";
@@ -54,6 +67,7 @@ function UnavailableState({ description }: { description: string }) {
 
 export function AdminUsersApiPage() {
   const notify = useNotify();
+  const roles = useAllRoles();
   const [users, setUsers] = useState<UserDto[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [sending, setSending] = useState(false);
@@ -69,6 +83,7 @@ export function AdminUsersApiPage() {
   const [userForm, setUserForm] = useState({
     username: "",
     email: "",
+    roleCode: "",
     roleCodes: "EMPLOYEE",
     employeeCode: "",
   });
@@ -101,6 +116,7 @@ export function AdminUsersApiPage() {
     setUserForm({
       username: "",
       email: "",
+      roleCode: roles[0]?.roleCode ?? "",
       roleCodes: "EMPLOYEE",
       employeeCode: "",
     });
@@ -112,6 +128,7 @@ export function AdminUsersApiPage() {
     setUserForm({
       username: user.username,
       email: user.email,
+      roleCode: "",
       roleCodes: user.roles.join(", "),
       employeeCode: user.employeeCode ?? "",
     });
@@ -121,6 +138,10 @@ export function AdminUsersApiPage() {
   const submitUser = async () => {
     if (!userForm.username.trim() || !userForm.email.trim()) {
       notify({ ok: false, message: "Vui lòng nhập đủ tên đăng nhập và email." });
+      return;
+    }
+    if (!editingUser && !userForm.roleCode) {
+      notify({ ok: false, message: "Vui lòng chọn vai trò cho tài khoản này." });
       return;
     }
     setSending(true);
@@ -136,6 +157,7 @@ export function AdminUsersApiPage() {
         const result = await userApi.create({
           username: userForm.username,
           email: userForm.email,
+          roleCode: userForm.roleCode,
           employeeCode: userForm.employeeCode || undefined,
         });
         setShowPassword(false);
@@ -370,15 +392,28 @@ export function AdminUsersApiPage() {
                   </Field>
                 </div>
               ) : (
-                <Field
-                  label="Mã nhân viên liên kết"
-                  hint="Vai trò tự lấy theo chức vụ của nhân viên này. Bỏ trống nếu tạo tài khoản không gắn nhân viên (cần Role đã gán role mặc định)."
-                >
-                  <Input
-                    value={userForm.employeeCode}
-                    onChange={(_, data) => setUserForm((value) => ({ ...value, employeeCode: data.value }))}
-                  />
-                </Field>
+                <div className="form-grid">
+                  <Field label="Vai trò" required>
+                    <Dropdown
+                      value={roles.find((r) => r.roleCode === userForm.roleCode)?.roleName ?? ""}
+                      selectedOptions={[userForm.roleCode]}
+                      onOptionSelect={(_, data) => setUserForm((value) => ({ ...value, roleCode: data.optionValue ?? "" }))}
+                    >
+                      {roles.map((r) => (
+                        <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
+                          {r.roleName}
+                        </Option>
+                      ))}
+                    </Dropdown>
+                    {!roles.length ? <FieldError message="Chưa có role nào được cấu hình." /> : null}
+                  </Field>
+                  <Field label="Mã nhân viên liên kết" hint="Bỏ trống nếu tạo tài khoản không gắn nhân viên (vd tài khoản hệ thống).">
+                    <Input
+                      value={userForm.employeeCode}
+                      onChange={(_, data) => setUserForm((value) => ({ ...value, employeeCode: data.value }))}
+                    />
+                  </Field>
+                </div>
               )}
             </DialogContent>
             <DialogActions>

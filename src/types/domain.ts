@@ -95,7 +95,6 @@ export interface PositionDto {
   isActive: boolean;
   standardSalary?: number;
   rankLevel: number;
-  roleCode?: string;
 }
 
 export interface CreatePositionRequest {
@@ -103,14 +102,12 @@ export interface CreatePositionRequest {
   positionName: string;
   description?: string;
   rankLevel: number;
-  roleCode: string;
 }
 
 export interface UpdatePositionRequest {
   positionName: string;
   description?: string;
   rankLevel: number;
-  roleCode: string;
 }
 
 export interface AttendanceRecordDto {
@@ -289,8 +286,7 @@ export interface UserDto {
 export interface CreateUserRequest {
   username: string;
   email: string;
-  // Không bắt buộc: backend tự lấy role từ Position.RoleCode của nhân viên liên kết khi
-  // bỏ trống. Chỉ cần truyền tay khi tạo tài khoản không gắn nhân viên (vd tài khoản hệ thống).
+  // Bắt buộc chọn tay — chức vụ chỉ là chức danh hiển thị, không còn tự suy ra role.
   roleCode?: string;
   employeeCode?: string;
 }
