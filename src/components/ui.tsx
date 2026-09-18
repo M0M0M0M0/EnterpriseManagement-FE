@@ -14,7 +14,7 @@ import { BoxRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 import { attendanceLabels, getInitials, requestLabels } from "../utils/format";
 
-const attendanceColors: Record<string, BadgeProps["color"]> = {
+export const attendanceColors: Record<string, BadgeProps["color"]> = {
   Present: "success",
   Late: "warning",
   HalfDay: "warning",

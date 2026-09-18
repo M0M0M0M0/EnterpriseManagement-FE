@@ -22,9 +22,12 @@ import {
   ClockRegular,
   PeopleTeamRegular,
 } from "@fluentui/react-icons";
-import { useEffect, useState } from "react";
+import { addMonths, eachDayOfInterval, endOfMonth, format as formatDateFns, getDay, startOfMonth, subMonths } from "date-fns";
+import { vi } from "date-fns/locale";
+import { useEffect, useMemo, useState } from "react";
 import {
   AttendanceBadge,
+  attendanceColors,
   EmptyState,
   FieldError,
   MetricRail,
@@ -56,6 +59,7 @@ import type {
   SaleDto,
 } from "../types/domain";
 import {
+  attendanceLabels,
   formatAmountInput,
   formatCurrency,
   formatDate,
@@ -186,6 +190,21 @@ export function EmployeeDashboardPage() {
   );
 }
 
+// Tái dùng đúng bảng màu attendanceColors (ui.tsx) để tô chấm màu trên lịch, tránh 2 nguồn màu
+// lệch nhau giữa Badge và ô lịch cho cùng 1 trạng thái.
+function attendanceStatusClass(status: string) {
+  switch (attendanceColors[status]) {
+    case "warning":
+      return "has-late";
+    case "danger":
+      return "has-absent";
+    case "informative":
+      return "has-missing-checkout";
+    default:
+      return "";
+  }
+}
+
 export function EmployeeAttendancePage() {
   const notify = useNotify();
   const [history, setHistory] = useState<AttendanceRecordDto[]>([]);
@@ -200,6 +219,8 @@ export function EmployeeAttendancePage() {
     newCheckInTime: "08:00",
     newCheckOutTime: "17:30",
   });
+  const [historyView, setHistoryView] = useState<"list" | "calendar">("list");
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const employeeCode = useEmployeeCode();
 
   // Chỉ hiện Spinner toàn trang ở lần tải đầu tiên (xem EmployeeDashboardPage.load ở trên).
@@ -223,6 +244,17 @@ export function EmployeeAttendancePage() {
   // Lần punch đầu tiên trong ngày luôn là Check-in; mọi lần sau luôn là Check-out (đè lên giờ
   // ra cũ nếu bấm nhiều lần) — khớp PunchAsync ở backend (AttendanceService.cs).
   const nextAction = !today?.checkInTime ? "Check-in" : "Check-out";
+
+  const recordsByDate = useMemo(() => new Map(history.map((r) => [r.attendanceDate, r])), [history]);
+
+  // Ô trống đầu lưới = số ngày lệch giữa Chủ nhật và ngày 1 của tháng (date-fns getDay: 0 = CN).
+  const calendarCells = useMemo(() => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    const leadingBlanks = getDay(monthStart);
+    return [...Array(leadingBlanks).fill(null), ...days];
+  }, [calendarMonth]);
 
   const punch = async () => {
     setPunching(true);
@@ -309,8 +341,70 @@ export function EmployeeAttendancePage() {
             </div>
           </section>
           <div className="two-column-grid">
-          <SectionPanel title="Lịch sử chấm công">
-            {history.length ? (
+          <SectionPanel
+            title="Lịch sử chấm công"
+            action={
+              <div className="view-toggle">
+                <Button
+                  size="small"
+                  appearance={historyView === "list" ? "primary" : "outline"}
+                  onClick={() => setHistoryView("list")}
+                >
+                  Danh sách
+                </Button>
+                <Button
+                  size="small"
+                  appearance={historyView === "calendar" ? "primary" : "outline"}
+                  onClick={() => setHistoryView("calendar")}
+                >
+                  Lịch
+                </Button>
+              </div>
+            }
+          >
+            {historyView === "calendar" ? (
+              <div>
+                <div className="attendance-calendar-header">
+                  <Button size="small" onClick={() => setCalendarMonth((m) => subMonths(m, 1))}>
+                    ‹
+                  </Button>
+                  <strong>{formatDateFns(calendarMonth, "MMMM yyyy", { locale: vi })}</strong>
+                  <Button size="small" onClick={() => setCalendarMonth((m) => addMonths(m, 1))}>
+                    ›
+                  </Button>
+                </div>
+                <div className="month-calendar">
+                  {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((dow) => (
+                    <div className="calendar-weekday" key={dow}>
+                      {dow}
+                    </div>
+                  ))}
+                  {calendarCells.map((day, index) => {
+                    if (!day) {
+                      return <div className="calendar-day is-outside" key={`blank-${index}`} />;
+                    }
+                    const key = formatDateFns(day, "yyyy-MM-dd");
+                    const record = recordsByDate.get(key);
+                    return (
+                      <div
+                        className={`calendar-day${record ? ` ${attendanceStatusClass(record.status)}` : " is-outside"}`}
+                        key={key}
+                        title={record ? attendanceLabels[record.status] ?? record.status : undefined}
+                      >
+                        {formatDateFns(day, "d")}
+                        {record ? <i /> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="attendance-calendar-legend">
+                  <span><i className="legend-dot" style={{ background: "var(--success)" }} />Đúng giờ</span>
+                  <span><i className="legend-dot" style={{ background: "#d97706" }} />Đi muộn / Nửa ngày</span>
+                  <span><i className="legend-dot" style={{ background: "var(--danger)" }} />Vắng mặt</span>
+                  <span><i className="legend-dot" style={{ background: "var(--brand)" }} />Nghỉ phép</span>
+                </div>
+              </div>
+            ) : history.length ? (
               <div className="attendance-list">
                 {history.map((record) => (
                   <article className="attendance-list-item" key={record.attendanceDate}>
@@ -482,6 +576,10 @@ export function EmployeeLeavePage() {
       return;
     } else if (isAnnualLeave && form.startDate < minAnnualDate) {
       notify({ ok: false, message: `Nghỉ có phép phải xin trước ít nhất 1 ngày. Ngày sớm nhất có thể xin: ${formatDate(minAnnualDate)}.` });
+      return;
+    }
+    if (!form.reason.trim()) {
+      notify({ ok: false, message: "Vui lòng nhập lý do xin nghỉ." });
       return;
     }
     setSending(true);
@@ -707,7 +805,7 @@ export function EmployeeLeavePage() {
                 </>
               )}
 
-              <Field label="Lý do">
+              <Field label="Lý do" required>
                 <Textarea
                   resize="vertical"
                   value={form.reason}

@@ -14,7 +14,7 @@ import {
   TabList,
   Textarea,
 } from "@fluentui/react-components";
-import { ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
+import { ArrowDownloadRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import {
   EmptyState,
@@ -183,6 +183,31 @@ export function ManagerEmployeesPage() {
   );
 }
 
+// Xuất CSV thuần client-side từ dữ liệu chấm công team đã tải sẵn — phục vụ tính lương sau này,
+// không cần thêm endpoint/thư viện Excel ở backend vì Excel mở CSV UTF-8 (có BOM) bình thường.
+function downloadAttendanceCsv(records: AttendanceRecordDto[], startDate: string, endDate: string) {
+  const header = ["Mã NV", "Nhân viên", "Ngày", "Giờ vào", "Giờ ra", "Giờ làm", "Trạng thái"];
+  const rows = records.map((r) => [
+    r.employeeCode,
+    r.employeeName,
+    r.attendanceDate,
+    r.checkInTime ? formatDateTime(r.checkInTime) : "",
+    r.checkOutTime ? formatDateTime(r.checkOutTime) : "",
+    r.workingHours != null ? String(r.workingHours) : "",
+    attendanceLabels[r.status] ?? r.status,
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\r\n");
+  const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `bang-cong_${startDate}_${endDate}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function ManagerAttendancePage() {
   const managerCode = useManagerCode();
   const notify = useNotify();
@@ -269,6 +294,13 @@ export function ManagerAttendancePage() {
                 onChange={(_, data) => setRange((v) => ({ ...v, endDate: data.value }))}
               />
             </Field>
+            <Button
+              icon={<ArrowDownloadRegular />}
+              disabled={!records.length}
+              onClick={() => downloadAttendanceCsv(records, range.startDate, range.endDate)}
+            >
+              Xuất bảng công
+            </Button>
           </div>
           {loading ? (
             <Spinner label="Đang tải..." />
