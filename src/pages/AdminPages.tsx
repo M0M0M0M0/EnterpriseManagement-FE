@@ -152,48 +152,19 @@ export function AdminEmployeesPage() {
     setOpen(true);
   };
 
-  const positionByCode = new Map(positions.map((p) => [p.positionCode, p]));
-
-  // Gợi ý quản lý trực tiếp mặc định: tìm bậc liền trên (rankLevel nhỏ hơn, gần nhất)
-  // trong cùng phòng ban. Chỉ tự điền khi bậc đó có đúng 1 người, để tránh chọn nhầm.
-  // Trưởng phòng (bậc cao nhất, không có bậc nào nhỏ hơn) thì không gợi ý gì.
-  const suggestManagerFor = (departmentCode: string, positionCode: string) => {
-    const rank = positionByCode.get(positionCode)?.rankLevel;
-    if (rank === undefined) return undefined;
-    const isTop = !positions.some((p) => p.rankLevel < rank);
-    if (isTop) return undefined;
-    const higherRanks = positions.map((p) => p.rankLevel).filter((r) => r < rank);
-    if (!higherRanks.length) return undefined;
-    const nextRank = Math.max(...higherRanks);
-    const candidates = employees.filter(
-      (e) =>
-        e.departmentCode === departmentCode &&
-        e.employmentStatus !== "Terminated" &&
-        positionByCode.get(e.positionCode)?.rankLevel === nextRank,
-    );
-    return candidates.length === 1 ? candidates[0] : undefined;
-  };
-
   const selectDepartment = (departmentCode: string) => {
     setForm((v) => {
       const managerStillValid = employees.some(
         (e) => e.employeeCode === v.managerCode && e.departmentCode === departmentCode,
       );
       if (managerStillValid) return { ...v, departmentCode };
-      const suggestion = suggestManagerFor(departmentCode, v.positionCode);
-      setManagerQuery(suggestion ? managerLabel(suggestion) : "");
-      return { ...v, departmentCode, managerCode: suggestion?.employeeCode ?? "" };
+      setManagerQuery("");
+      return { ...v, departmentCode, managerCode: "" };
     });
   };
 
   const selectPosition = (positionCode: string) => {
-    setForm((v) => {
-      if (v.managerCode) return { ...v, positionCode };
-      const suggestion = suggestManagerFor(v.departmentCode, positionCode);
-      if (!suggestion) return { ...v, positionCode };
-      setManagerQuery(managerLabel(suggestion));
-      return { ...v, positionCode, managerCode: suggestion.employeeCode };
-    });
+    setForm((v) => ({ ...v, positionCode }));
   };
 
   const handleManagerSelect = (optionValue: string | undefined) => {
@@ -364,36 +335,14 @@ export function AdminEmployeesPage() {
       e.employmentStatus !== "Terminated" &&
       e.employeeCode !== editing?.employeeCode,
   );
-  // Khi chưa gõ tìm kiếm, chỉ gợi ý người ở bậc liền trên (vd Nhân viên -> chỉ thấy Quản lý,
-  // không thấy Trưởng/Phó phòng). Trưởng phòng (bậc cao nhất) thì không gợi ý ai.
-  // Gõ tìm kiếm sẽ mở rộng ra xem được tất cả các bậc trong phòng ban.
-  // Chỉ áp dụng logic này khi các chức vụ đã thực sự được set Cấp bậc khác nhau — nếu tất
-  // cả chức vụ đang cùng 1 mức (vd chưa ai chỉnh, mặc định 0 hết) thì không đủ dữ liệu để
-  // so sánh cao/thấp, cứ hiện toàn bộ người cùng phòng ban cho đơn giản.
-  const ranksConfigured = new Set(positions.map((p) => p.rankLevel)).size > 1;
-  const selectedRank = positionByCode.get(form.positionCode)?.rankLevel;
-  const isTopRank = ranksConfigured && selectedRank !== undefined && !positions.some((p) => p.rankLevel < selectedRank);
-  const higherRanks = ranksConfigured && selectedRank !== undefined ? positions.map((p) => p.rankLevel).filter((r) => r < selectedRank) : [];
-  const nextHigherRank = higherRanks.length ? Math.max(...higherRanks) : undefined;
-  const tierCandidates =
-    nextHigherRank !== undefined
-      ? departmentManagerCandidates.filter((e) => positionByCode.get(e.positionCode)?.rankLevel === nextHigherRank)
-      : [];
-  const defaultManagerCandidates = !ranksConfigured
-    ? departmentManagerCandidates
-    : isTopRank
-      ? []
-      : tierCandidates.length
-        ? tierCandidates
-        : departmentManagerCandidates;
 
   // Vẫn giữ quản lý hiện tại của hồ sơ (nếu có) trong danh sách hiển thị, dù người đó
-  // khác bậc hoặc khác phòng ban, để mở form Sửa không làm mất lựa chọn đang có sẵn.
+  // khác phòng ban, để mở form Sửa không làm mất lựa chọn đang có sẵn.
   const currentManager = editing?.managerCode
     ? employees.find((e) => e.employeeCode === editing.managerCode)
     : undefined;
   const managerSearch = managerQuery.trim().toLowerCase();
-  const visibleCandidates = managerSearch ? departmentManagerCandidates : defaultManagerCandidates;
+  const visibleCandidates = departmentManagerCandidates;
   const managerCandidates =
     currentManager && !visibleCandidates.some((e) => e.employeeCode === currentManager.employeeCode)
       ? [currentManager, ...visibleCandidates]
@@ -903,7 +852,6 @@ export function AdminPositionsPage() {
     positionCode: "",
     positionName: "",
     description: "",
-    rankLevel: "50",
   });
   const [lockPosTarget, setLockPosTarget] = useState<PositionDto | null>(null);
   const [lockingPos, setLockingPos] = useState(false);
@@ -923,7 +871,6 @@ export function AdminPositionsPage() {
     positionCode: "",
     positionName: "",
     description: "",
-    rankLevel: "50",
   };
 
   const openCreatePosition = () => {
@@ -938,7 +885,6 @@ export function AdminPositionsPage() {
       positionCode: p.positionCode,
       positionName: p.positionName,
       description: p.description ?? "",
-      rankLevel: String(p.rankLevel),
     });
     setPosOpen(true);
   };
@@ -948,17 +894,11 @@ export function AdminPositionsPage() {
       notify({ ok: false, message: "Vui lòng nhập mã và tên chức vụ." });
       return;
     }
-    const rankLevel = Number(posForm.rankLevel);
-    if (!Number.isFinite(rankLevel)) {
-      notify({ ok: false, message: "Cấp bậc phải là một số." });
-      return;
-    }
     try {
       if (editingPosition) {
         await positionApi.update(editingPosition.positionCode, {
           positionName: posForm.positionName,
           description: posForm.description,
-          rankLevel,
         });
         notify({ ok: true, message: "Đã cập nhật chức vụ." });
       } else {
@@ -1016,7 +956,7 @@ export function AdminPositionsPage() {
                 <div>
                   <strong>{p.positionName}</strong>
                   <span>
-                    {p.positionCode} · Cấp {p.rankLevel} ·{" "}
+                    {p.positionCode} ·{" "}
                     {p.standardSalary ? formatCurrency(p.standardSalary) : "Chưa có lương chuẩn"}
                   </span>
                 </div>
@@ -1060,13 +1000,6 @@ export function AdminPositionsPage() {
               </Field>
               <Field label="Tên chức vụ" required>
                 <Input value={posForm.positionName} onChange={(_, data) => setPosForm((v) => ({ ...v, positionName: data.value }))} />
-              </Field>
-              <Field label="Cấp bậc" hint="Số càng nhỏ càng cao cấp. Để hở khoảng cách (vd 10, 20, 30) để dễ chèn thêm chức vụ mới ở giữa.">
-                <Input
-                  type="number"
-                  value={posForm.rankLevel}
-                  onChange={(_, data) => setPosForm((v) => ({ ...v, rankLevel: data.value }))}
-                />
               </Field>
               <Field label="Mô tả">
                 <Textarea resize="vertical" value={posForm.description} onChange={(_, data) => setPosForm((v) => ({ ...v, description: data.value }))} />
