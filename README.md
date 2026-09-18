@@ -8,25 +8,6 @@ Frontend Enterprise Management System theo huong tich hop backend that. Ung dung
 npm install
 npm run dev
 ```
-
-Backend can chay tai `http://localhost:5068`. Vite proxy cac request `/api/*` ve backend nay.
-
-## Tai khoan demo
-
-| Role | URL dang nhap | Username | Password |
-| --- | --- | --- | --- |
-| Employee | `/login` | `employee` | `123456` |
-| Manager | `/login` | `manager` | `123456` |
-| Admin | `/internal/admin-login` | `admin` | `123456` |
-
-Public login `/login` chi danh cho Employee va Manager. Tai khoan Admin phai dang nhap qua URL rieng `/internal/admin-login`; URL nay khong duoc hien trong sidebar, topbar hay menu public.
-
-## Ghi chu backend
-
-- Frontend khong fake nghiep vu backend cho Role, Permission, Menu, Audit Log.
-- Neu endpoint backend chua co hoac tra `404/501`, UI se hien trang thai `Chua kha dung`.
-- Payroll dang de sau: route `/admin/payroll` chi la placeholder read-only va khong hien trong Admin sidebar.
-
 ## Kiem tra chat luong
 
 ```bash
