@@ -533,14 +533,7 @@ export function AdminEmployeesPage() {
                 </Field>
               </div>
               <div className="form-grid">
-                <Field
-                  label="Quản lý trực tiếp"
-                  hint={
-                    ranksConfigured && form.departmentCode && departmentManagerCandidates.length > 0 && !managerSearch && !isTopRank && !tierCandidates.length
-                      ? "Chưa có ai ở bậc liền trên trong phòng ban này, gõ để tìm người khác."
-                      : undefined
-                  }
-                >
+                <Field label="Quản lý trực tiếp">
                   <Combobox
                     freeform
                     value={managerQuery}
