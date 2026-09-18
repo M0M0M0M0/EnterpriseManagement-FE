@@ -48,8 +48,6 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/employee/dashboard", label: "Dashboard", icon: <HomeRegular />, end: true },
     { to: "/employee/attendance", label: "Chấm công", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
-    { to: "/employee/sales", label: "Sale & KPI của tôi", icon: <ChartMultipleRegular /> },
-    { to: "/employee/customers", label: "Khách hàng", icon: <PeopleTeamRegular /> },
   ],
   manager: [
     { to: "/manager/dashboard", label: "Dashboard tổng quan", icon: <HomeRegular />, end: true },
@@ -57,8 +55,6 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/employee/attendance", label: "Chấm công", icon: <ClockRegular /> },
     { to: "/manager/attendance", label: "Quản lý chấm công", icon: <ClockRegular /> },
     { to: "/manager/leave", label: "Duyệt đơn xin nghỉ", icon: <DocumentBulletListRegular /> },
-    { to: "/manager/sales", label: "Quản lý KPI & Sale", icon: <ChartMultipleRegular /> },
-    { to: "/manager/customers", label: "Quản lý khách hàng", icon: <PeopleTeamRegular /> },
     { to: "/manager/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
   ],
   admin: [
@@ -66,7 +62,6 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/admin/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
     { to: "/admin/departments", label: "Phòng ban", icon: <BuildingRegular /> },
     { to: "/admin/positions", label: "Chức vụ", icon: <PersonRegular /> },
-    { to: "/admin/customers", label: "Quản lý khách hàng", icon: <PeopleTeamRegular /> },
     { to: "/admin/audit", label: "Audit Log", icon: <HistoryRegular /> },
     { to: "/admin/system", label: "System Administration", icon: <SettingsRegular /> },
   ],

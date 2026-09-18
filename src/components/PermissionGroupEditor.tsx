@@ -19,18 +19,14 @@ const GROUP_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   attendance: "Chấm công",
   leave: "Nghỉ phép",
-  sales: "Sale & KPI",
-  customer: "Khách hàng",
   organization: "Phòng ban & chức vụ",
   employee: "Nhân viên",
   users: "Tài khoản đăng nhập",
   audit: "Audit Log",
   system: "System Administration",
-  payroll: "Bảng lương",
 };
 
 const PAGE_KEY_ALIASES: Record<string, string> = {
-  customers: "customer",
   employees: "employee",
 };
 

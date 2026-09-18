@@ -21,12 +21,6 @@ const EmployeeAttendancePage = lazy(() =>
 const EmployeeLeavePage = lazy(() =>
   import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeLeavePage })),
 );
-const EmployeeSalesPage = lazy(() =>
-  import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeSalesPage })),
-);
-const EmployeeCustomersPage = lazy(() =>
-  import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeCustomersPage })),
-);
 
 const ManagerDashboardPage = lazy(() =>
   import("./pages/ManagerPages").then((m) => ({ default: m.ManagerDashboardPage })),
@@ -39,12 +33,6 @@ const ManagerAttendancePage = lazy(() =>
 );
 const ManagerLeavePage = lazy(() =>
   import("./pages/ManagerPages").then((m) => ({ default: m.ManagerLeavePage })),
-);
-const ManagerSalesPage = lazy(() =>
-  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerSalesPage })),
-);
-const ManagerCustomersPage = lazy(() =>
-  import("./pages/ManagerPages").then((m) => ({ default: m.ManagerCustomersPage })),
 );
 const ManagerOrganizationPage = lazy(() =>
   import("./pages/ManagerPages").then((m) => ({ default: m.ManagerOrganizationPage })),
@@ -65,15 +53,6 @@ const AdminDepartmentsPage = lazy(() =>
 const AdminPositionsPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminPositionsPage })),
 );
-const AdminSalesPage = lazy(() =>
-  import("./pages/AdminPages").then((m) => ({ default: m.AdminSalesPage })),
-);
-const AdminCustomersPage = lazy(() =>
-  import("./pages/AdminPages").then((m) => ({ default: m.AdminCustomersPage })),
-);
-const AdminPayrollPage = lazy(() =>
-  import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminPayrollDeferredPage })),
-);
 const AdminAuditLogPage = lazy(() =>
   import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminAuditLogApiPage })),
 );
@@ -81,25 +60,9 @@ const AdminSystemPage = lazy(() =>
   import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminSystemApiPage })),
 );
 
-const ManagerKpiCommissionPage = lazy(() =>
-  import("./pages/KpiCommissionPages").then((m) => ({ default: m.ManagerKpiCommissionPage })),
-);
-const EmployeeCommissionPage = lazy(() =>
-  import("./pages/KpiCommissionPages").then((m) => ({ default: m.EmployeeCommissionPage })),
-);
-
 function RequireAuth({ children }: { children: ReactNode }) {
   const currentRole = useAuthStore((state) => state.role);
   if (!currentRole) return <Navigate to="/login" replace />;
-  return children;
-}
-
-// Chốt chặn hẹp, chỉ dùng riêng cho /admin/payroll (chưa có menu/permission thật) — xem
-// ghi chú cạnh route bên dưới. Không dùng lại chỗ khác.
-function RequirePayrollPlaceholder({ children }: { children: ReactNode }) {
-  const currentRole = useAuthStore((state) => state.role);
-  if (!currentRole) return <Navigate to="/login" replace />;
-  if (currentRole !== "admin") return <Navigate to="/403" replace />;
   return children;
 }
 
@@ -158,24 +121,16 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/employee/dashboard", element: <EmployeeDashboardPage /> },
   { path: "/employee/attendance", element: <EmployeeAttendancePage /> },
   { path: "/employee/leave", element: <EmployeeLeavePage /> },
-  { path: "/employee/sales", element: <EmployeeSalesPage /> },
-  { path: "/employee/customers", element: <EmployeeCustomersPage /> },
   { path: "/manager/dashboard", element: <ManagerDashboardPage /> },
   { path: "/manager/employees", element: <ManagerEmployeesPage /> },
   { path: "/manager/attendance", element: <ManagerAttendancePage /> },
   { path: "/manager/leave", element: <ManagerLeavePage /> },
-  { path: "/manager/sales", element: <ManagerSalesPage /> },
-  { path: "/manager/customers", element: <ManagerCustomersPage /> },
   { path: "/manager/organization", element: <ManagerOrganizationPage /> },
   { path: "/manager/org-tree", element: <ManagerOrgTreePage /> },
-  { path: "/manager/kpi-commission", element: <ManagerKpiCommissionPage /> },
-  { path: "/employee/commission", element: <EmployeeCommissionPage /> },
   { path: "/admin/users", element: <AdminUsersPage /> },
   { path: "/admin/employees", element: <AdminEmployeesPage /> },
   { path: "/admin/departments", element: <AdminDepartmentsPage /> },
   { path: "/admin/positions", element: <AdminPositionsPage /> },
-  { path: "/admin/sales", element: <AdminSalesPage /> },
-  { path: "/admin/customers", element: <AdminCustomersPage /> },
   { path: "/admin/system", element: <AdminSystemPage /> },
   { path: "/admin/audit", element: <AdminAuditLogPage /> },
 ];
@@ -206,19 +161,6 @@ function App() {
           </Route>
         ))}
         <Route path="/admin/audit-log" element={<Navigate to="/admin/audit" replace />} />
-
-        {/* Payroll chưa có menu/permission riêng (tính năng chưa xong, không có trong sidebar) —
-            giữ tạm 1 chốt chặn hẹp theo role admin cho tới khi được đưa vào hệ thống
-            Menu/Permission như các trang khác ở trên. */}
-        <Route
-          element={
-            <RequirePayrollPlaceholder>
-              <AppShell />
-            </RequirePayrollPlaceholder>
-          }
-        >
-          <Route path="/admin/payroll" element={<AdminPayrollPage />} />
-        </Route>
 
         <Route path="/" element={<Navigate to="/app" replace />} />
         <Route path="*" element={<NotFoundPage />} />

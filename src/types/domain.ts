@@ -194,71 +194,12 @@ export interface SubmitLeaveRequest {
   reason?: string;
 }
 
-export interface CustomerDto {
-  customerCode: string;
-  customerName: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  assignedEmployeeName?: string;
-  status: string;
-}
-
-export interface CreateCustomerRequest {
-  customerName: string;
-  phone: string;
-  email?: string;
-  address?: string;
-}
-
-export interface SaleDto {
-  id: number;
-  saleCode: string;
-  customerCode: string;
-  customerName: string;
-  customerPhone?: string;
-  employeeCode: string;
-  employeeName: string;
-  departmentCode: string;
-  departmentName: string;
-  amount: number;
-  orderDate: string;
-  status: string;
-  note?: string;
-  rejectionReason?: string;
-  approverEmployeeCode?: string;
-  approverName?: string;
-  approvedAt?: string;
-}
-
-export interface SubmitSaleRequest {
-  // Đúng 1 trong 2: customerCode (khách hàng có sẵn) HOẶC newCustomerName+newCustomerPhone
-  // (khách hàng mới, tạo ở trạng thái Potential cho đến khi sale được duyệt).
-  customerCode?: string;
-  newCustomerName?: string;
-  newCustomerPhone?: string;
-  newCustomerEmail?: string;
-  newCustomerAddress?: string;
-  amount: number;
-  note?: string;
-}
-
-export interface UpdateSaleRequest {
-  amount: number;
-  note?: string;
-}
-
-export interface RejectSaleRequest {
-  rejectionReason: string;
-}
-
 export interface EmployeeDashboardDto {
   employeeCode: string;
   employeeName: string;
   todayAttendance?: AttendanceRecordDto;
   totalRemainingLeaveDays: number;
   pendingLeaveRequestsCount: number;
-  pendingSalesCount: number;
   pendingAttendanceAdjustmentsCount: number;
 }
 
@@ -266,9 +207,7 @@ export interface ManagerDashboardDto {
   managerCode: string;
   teamSize: number;
   pendingLeaveRequestsCount: number;
-  pendingSalesCount: number;
   pendingAttendanceAdjustmentsCount: number;
-  teamMonthlyRevenue: number;
   teamPresentTodayCount: number;
   teamAbsentTodayCount: number;
 }
@@ -390,85 +329,6 @@ export interface AuditLogFilters {
   date?: string;
 }
 
-export interface SalaryCalculationResult {
-  employeeCode: string;
-  year: number;
-  month: number;
-  baseSalary: number;
-  standardWorkingDays: number;
-  deductedDays: number;
-  dailyRate: number;
-  deductionAmount: number;
-  netSalary: number;
-}
-
-export interface KpiLevelDto {
-  id: number;
-  levelOrder: number;
-  minimumRevenue: number;
-  commissionRate: number;
-}
-
-// Dùng khi tạo/sửa Plan — không có id vì level có thể là mới hoàn toàn (Update thay toàn bộ
-// danh sách level mỗi lần sửa).
-export interface KpiLevelInput {
-  levelOrder: number;
-  minimumRevenue: number;
-  commissionRate: number;
-}
-
-export interface AssignedEmployeeDto {
-  employeeCode: string;
-  fullName: string;
-}
-
-export interface KpiPlanDto {
-  id: number;
-  planName: string;
-  description?: string;
-  isActive: boolean;
-  levels: KpiLevelDto[];
-  assignedEmployees: AssignedEmployeeDto[];
-}
-
-export interface CreateKpiPlanRequest {
-  planName: string;
-  description?: string;
-  levels: KpiLevelInput[];
-}
-
-export interface UpdateKpiPlanRequest {
-  planName: string;
-  description?: string;
-  levels: KpiLevelInput[];
-}
-
-export interface AssignEmployeesRequest {
-  employeeCodes: string[];
-}
-
-export interface CommissionDto {
-  id: number;
-  employeeCode: string;
-  employeeName: string;
-  periodStartDate: string;
-  periodEndDate: string;
-  totalRevenue: number;
-  kpiPlanName: string;
-  levelOrder: number;
-  commissionRate: number;
-  commissionAmount: number;
-  status: string;
-  approverName?: string;
-  approvedAt?: string;
-}
-
-export interface CalculateCommissionRequest {
-  employeeCode: string;
-  periodStartDate: string;
-  periodEndDate: string;
-}
-
 export interface OrgTreeNodeDto {
   employeeCode: string;
   fullName: string;
@@ -476,7 +336,6 @@ export interface OrgTreeNodeDto {
   departmentName: string;
   employmentStatus: string;
   todayAttendanceStatus: string;
-  monthlyRevenue: number;
   subordinateCount: number;
   subordinates: OrgTreeNodeDto[];
 }

@@ -26,31 +26,26 @@ import {
 import { useNotify } from "../components/useNotify";
 import {
   attendanceApi,
-  customerApi,
   dashboardApi,
   departmentApi,
   employeeApi,
   leaveRequestApi,
   positionApi,
-  saleApi,
 } from "../services/api";
 import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
 import type {
   AttendanceAdjustmentDto,
   AttendanceRecordDto,
-  CustomerDto,
   DepartmentDto,
   EmployeeDto,
   LeaveRequestDto,
   ManagerDashboardDto,
   OrgTreeNodeDto,
   PositionDto,
-  SaleDto,
 } from "../types/domain";
 import {
   attendanceLabels,
-  formatCurrency,
   formatDate,
   formatDateTime,
   formatLeaveTime,
@@ -93,19 +88,9 @@ export function ManagerDashboardPage() {
             tone: data.pendingLeaveRequestsCount ? "warning" : "success",
           },
           {
-            label: "Sale chờ duyệt",
-            value: data.pendingSalesCount,
-            tone: data.pendingSalesCount ? "warning" : "success",
-          },
-          {
             label: "Chỉnh sửa chấm công chờ duyệt",
             value: data.pendingAttendanceAdjustmentsCount,
             tone: data.pendingAttendanceAdjustmentsCount ? "warning" : "success",
-          },
-          {
-            label: "Doanh số team tháng này",
-            value: formatCurrency(data.teamMonthlyRevenue),
-            tone: "success",
           },
           { label: "Có mặt hôm nay", value: data.teamPresentTodayCount, tone: "success" },
           {
@@ -499,207 +484,6 @@ export function ManagerLeavePage() {
   );
 }
 
-export function ManagerSalesPage() {
-  const notify = useNotify();
-  const [pending, setPending] = useState<SaleDto[]>([]);
-  const [history, setHistory] = useState<SaleDto[]>([]);
-  const [tab, setTab] = useState("pending");
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [rejectTarget, setRejectTarget] = useState<SaleDto | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejecting, setRejecting] = useState(false);
-
-  const load = () => {
-    setLoading(true);
-    Promise.all([saleApi.getPending(), saleApi.getHistory()])
-      .then(([p, h]) => {
-        setPending(p);
-        setHistory(h);
-      })
-      .catch((err) => notify({ ok: false, message: errorMessage(err) }))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const approve = async (id: number) => {
-    setBusyId(id);
-    try {
-      await saleApi.approve(id);
-      notify({ ok: true, message: "Đã duyệt sale." });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const openReject = (sale: SaleDto) => {
-    setRejectTarget(sale);
-    setRejectReason("");
-  };
-
-  const confirmReject = async () => {
-    if (!rejectTarget) return;
-    if (!rejectReason.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập lý do từ chối." });
-      return;
-    }
-    setRejecting(true);
-    try {
-      await saleApi.reject(rejectTarget.id, { rejectionReason: rejectReason });
-      notify({ ok: true, message: "Đã từ chối sale." });
-      setRejectTarget(null);
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setRejecting(false);
-    }
-  };
-
-  const list = tab === "pending" ? pending : history;
-  const approvedRevenue = history
-    .filter((s) => s.status === "Confirmed" || s.status === "Completed")
-    .reduce((sum, s) => sum + s.amount, 0);
-
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="Quản lý KPI & Sale"
-        description="Duyệt sale của team và theo dõi doanh số."
-        action={
-          <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
-            <Tab value="pending">Chờ duyệt ({pending.length})</Tab>
-            <Tab value="history">Lịch sử</Tab>
-          </TabList>
-        }
-      />
-      <MetricRail
-        items={[
-          { label: "Doanh số đã duyệt", value: formatCurrency(approvedRevenue), tone: "success" },
-          { label: "Sale chờ duyệt", value: pending.length, tone: pending.length ? "warning" : "success" },
-        ]}
-      />
-      {loading ? (
-        <Spinner label="Đang tải..." />
-      ) : list.length ? (
-        <div className="review-list">
-          {list.map((sale) => (
-            <article key={sale.id} className="review-content">
-              <div>
-                <strong>{sale.employeeName}</strong>
-                <span>
-                  {sale.customerName} · {formatCurrency(sale.amount)} · {formatDate(sale.orderDate)}
-                </span>
-                {sale.note ? <p>{sale.note}</p> : null}
-                {sale.rejectionReason ? <p>Lý do từ chối: {sale.rejectionReason}</p> : null}
-              </div>
-              {tab === "pending" ? (
-                <div className="review-actions">
-                  <Button appearance="primary" disabled={busyId === sale.id} onClick={() => approve(sale.id)}>
-                    Duyệt
-                  </Button>
-                  <Button disabled={busyId === sale.id} onClick={() => openReject(sale)}>
-                    Từ chối
-                  </Button>
-                </div>
-              ) : (
-                <RequestBadge status={sale.status} />
-              )}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <EmptyState title="Không có sale" description="Danh sách sẽ cập nhật khi có sale mới." />
-      )}
-
-      <Dialog open={rejectTarget !== null} onOpenChange={(_, data) => !data.open && setRejectTarget(null)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Từ chối sale?</DialogTitle>
-            <DialogContent className="form-stack">
-              <p>
-                Sale của <strong>{rejectTarget?.employeeName}</strong> — khách hàng {rejectTarget?.customerName},{" "}
-                {rejectTarget ? formatCurrency(rejectTarget.amount) : ""}.
-              </p>
-              <Field label="Lý do từ chối" required>
-                <Textarea
-                  resize="vertical"
-                  value={rejectReason}
-                  onChange={(_, data) => setRejectReason(data.value)}
-                />
-              </Field>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setRejectTarget(null)} disabled={rejecting}>
-                Hủy
-              </Button>
-              <Button appearance="primary" onClick={confirmReject} disabled={rejecting}>
-                {rejecting ? <Spinner size="tiny" /> : "Từ chối sale"}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-    </div>
-  );
-}
-
-export function ManagerCustomersPage() {
-  const notify = useNotify();
-  const [customers, setCustomers] = useState<CustomerDto[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    customerApi
-      .getAll()
-      .then(setCustomers)
-      .catch((err) => notify({ ok: false, message: errorMessage(err) }))
-      .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <div className="page-stack">
-      <PageHeader title="Quản lý khách hàng" description="Danh sách khách hàng do nhân viên tạo (chỉ xem)." />
-      {loading ? (
-        <Spinner label="Đang tải..." />
-      ) : customers.length ? (
-        <div className="enterprise-table-wrap">
-          <table className="enterprise-table">
-            <thead>
-              <tr>
-                <th>Mã KH</th>
-                <th>Tên khách hàng</th>
-                <th>Điện thoại</th>
-                <th>Phụ trách</th>
-                <th>Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((c) => (
-                <tr key={c.customerCode}>
-                  <td>{c.customerCode}</td>
-                  <td>{c.customerName}</td>
-                  <td>{c.phone ?? "--"}</td>
-                  <td>{c.assignedEmployeeName ?? "--"}</td>
-                  <td>
-                    <Badge appearance="tint">{c.status}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <EmptyState title="Chưa có khách hàng" description="Danh sách sẽ cập nhật khi nhân viên tạo khách hàng." />
-      )}
-    </div>
-  );
-}
 
 export function ManagerOrganizationPage() {
   const notify = useNotify();
@@ -790,9 +574,6 @@ function OrgTreeNodeRow({ node, depth }: { node: OrgTreeNodeDto; depth: number }
           <Badge appearance="tint" color={attendanceBadgeColor(node.todayAttendanceStatus)}>
             {attendanceLabels[node.todayAttendanceStatus] ?? "Chưa chấm công"}
           </Badge>
-          {node.monthlyRevenue > 0 ? (
-            <span className="org-tree-revenue">{formatCurrency(node.monthlyRevenue)}</span>
-          ) : null}
         </div>
       </div>
       {hasChildren && expanded ? (

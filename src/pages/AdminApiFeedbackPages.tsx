@@ -1146,17 +1146,3 @@ export function AdminSystemApiPage() {
     </div>
   );
 }
-
-export function AdminPayrollDeferredPage() {
-  return (
-    <div className="page-stack">
-      <PageHeader title="Payroll để sau" description="Workflow bảng lương chưa làm ngay trong giai đoạn frontend API-based này." />
-      <SectionPanel>
-        <EmptyState
-          title="Payroll để sau"
-          description="Các thao tác tính lương, duyệt lương và đánh dấu đã trả sẽ được triển khai sau khi backend/API payroll sẵn sàng."
-        />
-      </SectionPanel>
-    </div>
-  );
-}

@@ -20,7 +20,6 @@ import {
   CalendarRegular,
   CheckmarkCircleRegular,
   ClockRegular,
-  PeopleTeamRegular,
 } from "@fluentui/react-icons";
 import { addMonths, eachDayOfInterval, endOfMonth, format as formatDateFns, getDay, startOfMonth, subMonths } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -38,37 +37,30 @@ import {
 import { useNotify } from "../components/useNotify";
 import {
   attendanceApi,
-  customerApi,
   dashboardApi,
   leaveBalanceApi,
   leaveRequestApi,
   leaveTypeApi,
-  saleApi,
 } from "../services/api";
 import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
 import type {
   AttendanceAdjustmentDto,
   AttendanceRecordDto,
-  CustomerDto,
   EmployeeDashboardDto,
   LeaveBalanceDto,
   LeaveRequestDto,
   LeaveSession,
   LeaveTypeDto,
-  SaleDto,
 } from "../types/domain";
 import {
   attendanceLabels,
-  formatAmountInput,
-  formatCurrency,
   formatDate,
   formatDateTime,
   formatLeaveTime,
   formatTime,
   isoDate,
   leaveSessionLabels,
-  parseAmountInput,
   shortLeaveSlotLabel,
   shortLeaveSlots,
 } from "../utils/format";
@@ -173,11 +165,6 @@ export function EmployeeDashboardPage() {
             label: "Đơn nghỉ chờ duyệt",
             value: data.pendingLeaveRequestsCount,
             tone: data.pendingLeaveRequestsCount ? "warning" : "success",
-          },
-          {
-            label: "Sale chờ duyệt",
-            value: data.pendingSalesCount,
-            tone: data.pendingSalesCount ? "warning" : "success",
           },
           {
             label: "Điều chỉnh chấm công chờ duyệt",
@@ -817,420 +804,6 @@ export function EmployeeLeavePage() {
               <Button onClick={() => setOpen(false)}>Hủy</Button>
               <Button appearance="primary" onClick={submit} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : "Gửi đơn"}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-    </div>
-  );
-}
-
-// Sentinel cho lựa chọn "+ Khách hàng mới" trong Dropdown chọn khách hàng lúc tạo sale.
-const NEW_CUSTOMER_OPTION = "__new__";
-
-export function EmployeeSalesPage() {
-  const notify = useNotify();
-  const [sales, setSales] = useState<SaleDto[]>([]);
-  const [customers, setCustomers] = useState<CustomerDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<SaleDto | null>(null);
-  const [sending, setSending] = useState(false);
-  const [cancellingId, setCancellingId] = useState<number | null>(null);
-  const [form, setForm] = useState({
-    customerCode: "",
-    newCustomerName: "",
-    newCustomerPhone: "",
-    newCustomerEmail: "",
-    newCustomerAddress: "",
-    amount: "",
-    note: "",
-  });
-
-  // Khách hàng đang Potential (mới nhập kèm 1 sale khác chưa được duyệt) chưa nên chọn lại được
-  // ở đây — chỉ hiện khách đã Active, tránh nhầm với khách hàng "ảo" chưa chắc tồn tại thật.
-  const activeCustomers = customers.filter((c) => c.status === "Active");
-
-  const load = () => {
-    setLoading(true);
-    Promise.all([saleApi.getMine(), customerApi.getAll()])
-      .then(([s, c]) => {
-        setSales(s);
-        setCustomers(c);
-      })
-      .catch((err) => notify({ ok: false, message: errorMessage(err) }))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const emptyForm = {
-    customerCode: "",
-    newCustomerName: "",
-    newCustomerPhone: "",
-    newCustomerEmail: "",
-    newCustomerAddress: "",
-    amount: "",
-    note: "",
-  };
-
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ ...emptyForm, customerCode: activeCustomers[0]?.customerCode ?? "" });
-    setOpen(true);
-  };
-
-  const openEdit = (sale: SaleDto) => {
-    setEditing(sale);
-    setForm({
-      ...emptyForm,
-      customerCode: sale.customerCode,
-      amount: formatAmountInput(String(sale.amount)),
-      note: sale.note ?? "",
-    });
-    setOpen(true);
-  };
-
-  const isNewCustomer = form.customerCode === NEW_CUSTOMER_OPTION;
-
-  const submit = async () => {
-    const amount = parseAmountInput(form.amount);
-    if (!amount || amount <= 0) {
-      notify({ ok: false, message: "Giá trị hợp đồng phải lớn hơn 0." });
-      return;
-    }
-    setSending(true);
-    try {
-      if (editing) {
-        await saleApi.update(editing.id, { amount, note: form.note });
-        notify({ ok: true, message: "Đã cập nhật sale." });
-      } else if (isNewCustomer) {
-        if (!form.newCustomerName.trim() || !form.newCustomerPhone.trim()) {
-          notify({ ok: false, message: "Vui lòng nhập đủ tên và số điện thoại khách hàng mới." });
-          setSending(false);
-          return;
-        }
-        await saleApi.submit({
-          newCustomerName: form.newCustomerName,
-          newCustomerPhone: form.newCustomerPhone,
-          newCustomerEmail: form.newCustomerEmail || undefined,
-          newCustomerAddress: form.newCustomerAddress || undefined,
-          amount,
-          note: form.note,
-        });
-        notify({ ok: true, message: "Đã tạo sale mới." });
-      } else {
-        if (!form.customerCode) {
-          notify({ ok: false, message: "Vui lòng chọn khách hàng." });
-          setSending(false);
-          return;
-        }
-        await saleApi.submit({ customerCode: form.customerCode, amount, note: form.note });
-        notify({ ok: true, message: "Đã tạo sale mới." });
-      }
-      setOpen(false);
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const cancelSale = async (sale: SaleDto) => {
-    setCancellingId(sale.id);
-    try {
-      await saleApi.cancel(sale.id);
-      notify({ ok: true, message: "Đã hủy sale." });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setCancellingId(null);
-    }
-  };
-
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="Sale & KPI của tôi"
-        description="Ghi nhận hợp đồng mới và theo dõi trạng thái duyệt."
-        action={
-          <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
-            Tạo sale
-          </Button>
-        }
-      />
-      {loading ? (
-        <Spinner label="Đang tải..." />
-      ) : (
-        <SectionPanel title="Lịch sử sale">
-          {sales.length ? (
-            <div className="request-list">
-              {sales.map((sale) => (
-                <article key={sale.id}>
-                  <div className="request-icon">
-                    <PeopleTeamRegular />
-                  </div>
-                  <div className="request-main">
-                    <strong>{sale.customerName}</strong>
-                    <span>
-                      {formatCurrency(sale.amount)} · {formatDate(sale.orderDate)}
-                    </span>
-                    {sale.note ? <p>{sale.note}</p> : null}
-                    {sale.rejectionReason ? <p>Lý do từ chối: {sale.rejectionReason}</p> : null}
-                  </div>
-                  <div className="row-actions">
-                    <RequestBadge status={sale.status} />
-                    {sale.status === "Pending" ? (
-                      <>
-                        <Button size="small" onClick={() => openEdit(sale)}>
-                          Sửa
-                        </Button>
-                        <Button
-                          size="small"
-                          disabled={cancellingId === sale.id}
-                          onClick={() => cancelSale(sale)}
-                        >
-                          {cancellingId === sale.id ? <Spinner size="tiny" /> : "Hủy"}
-                        </Button>
-                      </>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="Chưa có sale" description="Tạo sale đầu tiên của bạn." actionLabel="Tạo sale" onAction={openCreate} />
-          )}
-        </SectionPanel>
-      )}
-
-      <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>{editing ? "Cập nhật sale" : "Tạo sale mới"}</DialogTitle>
-            <DialogContent className="form-stack">
-              {!editing ? (
-                <Field label="Khách hàng" required>
-                  <Dropdown
-                    value={
-                      isNewCustomer
-                        ? "+ Khách hàng mới"
-                        : activeCustomers.find((c) => c.customerCode === form.customerCode)?.customerName ?? ""
-                    }
-                    selectedOptions={[form.customerCode]}
-                    onOptionSelect={(_, data) => setForm((v) => ({ ...v, customerCode: data.optionValue ?? "" }))}
-                  >
-                    {activeCustomers.map((c) => (
-                      <Option key={c.customerCode} value={c.customerCode}>
-                        {c.customerName}
-                      </Option>
-                    ))}
-                    <Option key={NEW_CUSTOMER_OPTION} value={NEW_CUSTOMER_OPTION}>
-                      + Khách hàng mới
-                    </Option>
-                  </Dropdown>
-                </Field>
-              ) : null}
-              {!editing && isNewCustomer ? (
-                <>
-                  <Field label="Tên khách hàng mới" required>
-                    <Input
-                      value={form.newCustomerName}
-                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerName: data.value }))}
-                    />
-                  </Field>
-                  <Field label="Số điện thoại" required>
-                    <Input
-                      value={form.newCustomerPhone}
-                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerPhone: data.value }))}
-                    />
-                  </Field>
-                  <Field label="Email">
-                    <Input
-                      value={form.newCustomerEmail}
-                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerEmail: data.value }))}
-                    />
-                  </Field>
-                  <Field label="Địa chỉ">
-                    <Input
-                      value={form.newCustomerAddress}
-                      onChange={(_, data) => setForm((v) => ({ ...v, newCustomerAddress: data.value }))}
-                    />
-                  </Field>
-                </>
-              ) : null}
-              <Field label="Giá trị hợp đồng (VND)" required>
-                <Input
-                  value={form.amount}
-                  onChange={(_, data) => setForm((v) => ({ ...v, amount: formatAmountInput(data.value) }))}
-                />
-              </Field>
-              <Field label="Ghi chú">
-                <Textarea
-                  resize="vertical"
-                  value={form.note}
-                  onChange={(_, data) => setForm((v) => ({ ...v, note: data.value }))}
-                />
-              </Field>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setOpen(false)}>Hủy</Button>
-              <Button appearance="primary" onClick={submit} disabled={sending}>
-                {sending ? <Spinner size="tiny" /> : "Lưu"}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-    </div>
-  );
-}
-
-export function EmployeeCustomersPage() {
-  const notify = useNotify();
-  const [customers, setCustomers] = useState<CustomerDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [form, setForm] = useState({ customerName: "", phone: "", email: "", address: "" });
-
-  const load = () => {
-    setLoading(true);
-    customerApi
-      .getAll()
-      .then(setCustomers)
-      .catch((err) => notify({ ok: false, message: errorMessage(err) }))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const filtered = customers.filter((c) =>
-    c.customerName.toLowerCase().includes(search.trim().toLowerCase()),
-  );
-  const possibleDuplicate =
-    search.trim().length > 1 &&
-    customers.some((c) => c.customerName.toLowerCase() === search.trim().toLowerCase());
-
-  const submit = async () => {
-    if (!form.customerName.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập tên khách hàng." });
-      return;
-    }
-    if (!form.phone.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập số điện thoại khách hàng." });
-      return;
-    }
-    setSending(true);
-    try {
-      await customerApi.create(form);
-      notify({ ok: true, message: "Đã thêm khách hàng." });
-      setOpen(false);
-      setForm({ customerName: "", phone: "", email: "", address: "" });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="Khách hàng"
-        description="Tìm kiếm khách hàng hiện có hoặc tạo mới, tránh trùng lặp."
-        action={
-          <Button
-            appearance="primary"
-            icon={<AddRegular />}
-            onClick={() => {
-              setForm({ customerName: search, phone: "", email: "", address: "" });
-              setOpen(true);
-            }}
-          >
-            Tạo khách hàng
-          </Button>
-        }
-      />
-      <Field label="Tìm kiếm theo tên">
-        <Input value={search} onChange={(_, data) => setSearch(data.value)} placeholder="Nhập tên khách hàng..." />
-      </Field>
-      {possibleDuplicate ? (
-        <div className="info-banner">
-          <PeopleTeamRegular />
-          <div>
-            <strong>Có thể đã tồn tại</strong>
-            <p>Đã tìm thấy khách hàng trùng tên. Kiểm tra danh sách bên dưới trước khi tạo mới.</p>
-          </div>
-        </div>
-      ) : null}
-      {loading ? (
-        <Spinner label="Đang tải..." />
-      ) : filtered.length ? (
-        <div className="enterprise-table-wrap">
-          <table className="enterprise-table">
-            <thead>
-              <tr>
-                <th>Mã KH</th>
-                <th>Tên khách hàng</th>
-                <th>Điện thoại</th>
-                <th>Email</th>
-                <th>Phụ trách</th>
-                <th>Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <tr key={c.customerCode}>
-                  <td>{c.customerCode}</td>
-                  <td>{c.customerName}</td>
-                  <td>{c.phone ?? "--"}</td>
-                  <td>{c.email ?? "--"}</td>
-                  <td>{c.assignedEmployeeName ?? "--"}</td>
-                  <td>
-                    <Badge appearance="tint">{c.status}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <EmptyState title="Không tìm thấy khách hàng" description="Thử tạo khách hàng mới với tên đã tìm." />
-      )}
-
-      <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Tạo khách hàng mới</DialogTitle>
-            <DialogContent className="form-stack">
-              <Field label="Tên khách hàng" required>
-                <Input
-                  value={form.customerName}
-                  onChange={(_, data) => setForm((v) => ({ ...v, customerName: data.value }))}
-                />
-              </Field>
-              <div className="form-grid">
-                <Field label="Điện thoại" required>
-                  <Input value={form.phone} onChange={(_, data) => setForm((v) => ({ ...v, phone: data.value }))} />
-                </Field>
-                <Field label="Email">
-                  <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
-                </Field>
-              </div>
-              <Field label="Địa chỉ">
-                <Input value={form.address} onChange={(_, data) => setForm((v) => ({ ...v, address: data.value }))} />
-              </Field>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setOpen(false)}>Hủy</Button>
-              <Button appearance="primary" onClick={submit} disabled={sending}>
-                {sending ? <Spinner size="tiny" /> : "Tạo mới"}
               </Button>
             </DialogActions>
           </DialogBody>
