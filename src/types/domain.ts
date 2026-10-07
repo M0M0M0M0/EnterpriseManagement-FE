@@ -154,6 +154,19 @@ export interface LeaveTypeDto {
   isActive: boolean;
 }
 
+export interface UpdateLeaveTypeRequest {
+  leaveTypeName: string;
+  accrualAmount: number;
+  accrualUnit: LeaveUnit;
+  accrualPeriod: LeaveAccrualPeriod;
+  isPaid: boolean;
+  description?: string;
+}
+
+export interface CreateLeaveTypeRequest extends UpdateLeaveTypeRequest {
+  leaveTypeCode: string;
+}
+
 export interface LeaveBalanceDto {
   leaveTypeCode: string;
   leaveTypeName: string;

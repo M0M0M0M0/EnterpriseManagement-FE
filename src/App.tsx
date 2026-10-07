@@ -53,6 +53,9 @@ const AdminDepartmentsPage = lazy(() =>
 const AdminPositionsPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminPositionsPage })),
 );
+const AdminLeaveTypesPage = lazy(() =>
+  import("./pages/AdminPages").then((m) => ({ default: m.AdminLeaveTypesPage })),
+);
 const AdminAuditLogPage = lazy(() =>
   import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminAuditLogApiPage })),
 );
@@ -131,6 +134,7 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/admin/employees", element: <AdminEmployeesPage /> },
   { path: "/admin/departments", element: <AdminDepartmentsPage /> },
   { path: "/admin/positions", element: <AdminPositionsPage /> },
+  { path: "/admin/leave-types", element: <AdminLeaveTypesPage /> },
   { path: "/admin/system", element: <AdminSystemPage /> },
   { path: "/admin/audit", element: <AdminAuditLogPage /> },
 ];

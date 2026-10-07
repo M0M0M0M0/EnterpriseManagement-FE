@@ -6,6 +6,7 @@ import type {
   ChangePasswordRequest,
   CreateDepartmentRequest,
   CreateEmployeeRequest,
+  CreateLeaveTypeRequest,
   CreateMenuRequest,
   CreatePermissionRequest,
   CreateRoleRequest,
@@ -30,6 +31,7 @@ import type {
   SubmitLeaveRequest,
   UpdateDepartmentRequest,
   UpdateEmployeeRequest,
+  UpdateLeaveTypeRequest,
   UpdateMenuRequest,
   UpdatePermissionRequest,
   UpdatePositionRequest,
@@ -117,6 +119,13 @@ export const attendanceApi = {
 
 export const leaveTypeApi = {
   getAll: () => http.get<LeaveTypeDto[]>("/leave-types"),
+  create: (request: CreateLeaveTypeRequest) =>
+    http.post<LeaveTypeDto>("/leave-types", request),
+  update: (leaveTypeCode: string, request: UpdateLeaveTypeRequest) =>
+    http.put<LeaveTypeDto>(`/leave-types/${leaveTypeCode}`, request),
+  setActive: (leaveTypeCode: string, isActive: boolean) =>
+    http.put<LeaveTypeDto>(`/leave-types/${leaveTypeCode}/active`, { isActive }),
+  remove: (leaveTypeCode: string) => http.delete<void>(`/leave-types/${leaveTypeCode}`),
 };
 
 export const leaveBalanceApi = {

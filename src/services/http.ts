@@ -47,6 +47,7 @@ export const http = {
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
 export function errorMessage(error: unknown, fallback = "Đã xảy ra lỗi.") {

@@ -22,6 +22,7 @@ import { useNotify } from "../components/useNotify";
 import {
   departmentApi,
   employeeApi,
+  leaveTypeApi,
   positionApi,
   userApi,
 } from "../services/api";
@@ -29,6 +30,9 @@ import { errorMessage } from "../services/http";
 import type {
   DepartmentDto,
   EmployeeDto,
+  LeaveAccrualPeriod,
+  LeaveTypeDto,
+  LeaveUnit,
   PositionDto,
   UserDto,
 } from "../types/domain";
@@ -1016,6 +1020,323 @@ export function AdminPositionsPage() {
         confirming={lockingPos}
         onConfirm={confirmLockPosition}
         onCancel={() => setLockPosTarget(null)}
+      />
+    </div>
+  );
+}
+
+const UNIT_LABEL: Record<LeaveUnit, string> = { Days: "Ngày", Hours: "Giờ" };
+const PERIOD_LABEL: Record<LeaveAccrualPeriod, string> = {
+  ProratedYearly: "Cộng dồn trong năm",
+  MonthlyReset: "Cấp mỗi tháng, hết tháng reset",
+  FlatYearly: "Cấp một lần mỗi năm",
+};
+// Diễn giải quy tắc cấp, khớp LeaveBalanceService.CalculateDefaultAllocation
+const PERIOD_HINT: Record<LeaveAccrualPeriod, string> = {
+  ProratedYearly:
+    "Cộng dồn trong năm: cấp số lượng này cho mỗi tháng, tổng cả năm = số lượng x số tháng còn lại (nhân viên vào giữa năm chỉ tính từ tháng vào).",
+  MonthlyReset: "Cấp mỗi tháng: mỗi tháng được cấp đúng số lượng này, hết tháng thì reset, không cộng dồn.",
+  FlatYearly: "Cấp một lần mỗi năm: đầu năm cấp đúng số lượng này cho cả năm.",
+};
+
+function describeAccrual(t: LeaveTypeDto) {
+  const unit = t.accrualUnit === "Days" ? "ngày" : "giờ";
+  if (t.accrualPeriod === "ProratedYearly") return `${t.accrualAmount} ${unit}/tháng, cộng dồn trong năm`;
+  if (t.accrualPeriod === "MonthlyReset") return `${t.accrualAmount} ${unit}/tháng, hết tháng reset`;
+  return `${t.accrualAmount} ${unit}/năm, cấp một lần`;
+}
+
+const emptyLeaveTypeForm = {
+  leaveTypeCode: "",
+  leaveTypeName: "",
+  accrualAmount: "1",
+  accrualUnit: "Days" as LeaveUnit,
+  accrualPeriod: "ProratedYearly" as LeaveAccrualPeriod,
+  isPaid: true,
+  description: "",
+};
+
+export function AdminLeaveTypesPage() {
+  const notify = useNotify();
+  const [items, setItems] = useState<LeaveTypeDto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<LeaveTypeDto | null>(null);
+  const [form, setForm] = useState(emptyLeaveTypeForm);
+  const [saving, setSaving] = useState(false);
+  const [lockTarget, setLockTarget] = useState<LeaveTypeDto | null>(null);
+  const [locking, setLocking] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<LeaveTypeDto | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    leaveTypeApi
+      .getAll()
+      .then(setItems)
+      .catch((err) => notify({ ok: false, message: errorMessage(err) }))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyLeaveTypeForm);
+    setOpen(true);
+  };
+
+  const openEdit = (t: LeaveTypeDto) => {
+    setEditing(t);
+    setForm({
+      leaveTypeCode: t.leaveTypeCode,
+      leaveTypeName: t.leaveTypeName,
+      accrualAmount: String(t.accrualAmount),
+      accrualUnit: t.accrualUnit,
+      accrualPeriod: t.accrualPeriod,
+      isPaid: t.isPaid,
+      description: t.description ?? "",
+    });
+    setOpen(true);
+  };
+
+  const submit = async () => {
+    const amount = Number(form.accrualAmount);
+    if (!editing && !form.leaveTypeCode.trim()) {
+      notify({ ok: false, message: "Vui lòng nhập mã loại nghỉ." });
+      return;
+    }
+    if (!form.leaveTypeName.trim()) {
+      notify({ ok: false, message: "Vui lòng nhập tên loại nghỉ." });
+      return;
+    }
+    if (!form.accrualAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
+      notify({ ok: false, message: "Số lượng cấp phải lớn hơn 0." });
+      return;
+    }
+    const body = {
+      leaveTypeName: form.leaveTypeName.trim(),
+      accrualAmount: amount,
+      accrualUnit: form.accrualUnit,
+      accrualPeriod: form.accrualPeriod,
+      isPaid: form.isPaid,
+      description: form.description.trim(),
+    };
+    setSaving(true);
+    try {
+      if (editing) {
+        await leaveTypeApi.update(editing.leaveTypeCode, body);
+        notify({ ok: true, message: "Đã cập nhật loại nghỉ phép." });
+      } else {
+        await leaveTypeApi.create({ ...body, leaveTypeCode: form.leaveTypeCode.trim().toUpperCase() });
+        notify({ ok: true, message: "Đã thêm loại nghỉ phép." });
+      }
+      setOpen(false);
+      setEditing(null);
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = async (t: LeaveTypeDto) => {
+    try {
+      await leaveTypeApi.setActive(t.leaveTypeCode, !t.isActive);
+      notify({ ok: true, message: "Đã cập nhật trạng thái loại nghỉ." });
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    }
+  };
+
+  const confirmLock = async () => {
+    if (!lockTarget) return;
+    setLocking(true);
+    try {
+      await toggle(lockTarget);
+      setLockTarget(null);
+    } finally {
+      setLocking(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await leaveTypeApi.remove(deleteTarget.leaveTypeCode);
+      notify({ ok: true, message: "Đã xóa loại nghỉ phép." });
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      // Giữ dialog mở và hiện nguyên văn message backend kèm gợi ý tắt thay vì xóa
+      setDeleteError(`${errorMessage(err)} Hãy tắt loại nghỉ này thay vì xóa.`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        title="Loại nghỉ phép"
+        description="Tạo, sửa, bật/tắt, xóa loại nghỉ và quy tắc cấp số dư."
+        action={
+          <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
+            Thêm loại nghỉ
+          </Button>
+        }
+      />
+      {loading ? (
+        <Spinner label="Đang tải..." />
+      ) : (
+        <SectionPanel title="Danh sách loại nghỉ phép">
+          {items.length === 0 ? <EmptyState title="Chưa có loại nghỉ nào." description="Bấm Thêm loại nghỉ để tạo mới." /> : null}
+          <div className="compact-list">
+            {items.map((t) => (
+              <div className="compact-row" key={t.leaveTypeCode}>
+                <div>
+                  <strong>{t.leaveTypeName}</strong>
+                  <span>
+                    {t.leaveTypeCode} · Đơn vị: {UNIT_LABEL[t.accrualUnit]} · {describeAccrual(t)} ·{" "}
+                    {t.isPaid ? "Có lương" : "Không lương"}
+                  </span>
+                </div>
+                <div className="row-actions">
+                  <Badge appearance="tint" color={t.isActive ? "success" : "subtle"}>
+                    {t.isActive ? "Hoạt động" : "Ngừng"}
+                  </Badge>
+                  <Button size="small" onClick={() => openEdit(t)}>
+                    Sửa
+                  </Button>
+                  <Button size="small" onClick={() => (t.isActive ? setLockTarget(t) : toggle(t))}>
+                    {t.isActive ? "Tắt" : "Bật"}
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setDeleteError("");
+                      setDeleteTarget(t);
+                    }}
+                  >
+                    Xóa
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionPanel>
+      )}
+
+      <Dialog
+        open={open}
+        onOpenChange={(_, data) => {
+          setOpen(data.open);
+          if (!data.open) setEditing(null);
+        }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{editing ? "Sửa loại nghỉ phép" : "Thêm loại nghỉ phép"}</DialogTitle>
+            <DialogContent className="form-stack">
+              <Field label="Mã loại nghỉ" required>
+                <Input
+                  value={form.leaveTypeCode}
+                  disabled={!!editing}
+                  onChange={(_, data) => setForm((v) => ({ ...v, leaveTypeCode: data.value.toUpperCase() }))}
+                />
+              </Field>
+              <Field label="Tên loại nghỉ" required>
+                <Input value={form.leaveTypeName} onChange={(_, data) => setForm((v) => ({ ...v, leaveTypeName: data.value }))} />
+              </Field>
+              <Field label="Số lượng cấp" required>
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={form.accrualAmount}
+                  onChange={(_, data) => setForm((v) => ({ ...v, accrualAmount: data.value }))}
+                />
+              </Field>
+              <Field label="Đơn vị" required>
+                <Dropdown
+                  value={UNIT_LABEL[form.accrualUnit]}
+                  selectedOptions={[form.accrualUnit]}
+                  onOptionSelect={(_, data) => setForm((v) => ({ ...v, accrualUnit: data.optionValue as LeaveUnit }))}
+                >
+                  <Option value="Days">Ngày</Option>
+                  <Option value="Hours">Giờ</Option>
+                </Dropdown>
+              </Field>
+              <Field label="Chu kỳ cấp" required hint={PERIOD_HINT[form.accrualPeriod]}>
+                <Dropdown
+                  value={PERIOD_LABEL[form.accrualPeriod]}
+                  selectedOptions={[form.accrualPeriod]}
+                  onOptionSelect={(_, data) =>
+                    setForm((v) => ({ ...v, accrualPeriod: data.optionValue as LeaveAccrualPeriod }))
+                  }
+                >
+                  {(Object.keys(PERIOD_LABEL) as LeaveAccrualPeriod[]).map((p) => (
+                    <Option key={p} value={p}>
+                      {PERIOD_LABEL[p]}
+                    </Option>
+                  ))}
+                </Dropdown>
+              </Field>
+              <Field label="Có lương">
+                <Dropdown
+                  value={form.isPaid ? "Có lương" : "Không lương"}
+                  selectedOptions={[form.isPaid ? "paid" : "unpaid"]}
+                  onOptionSelect={(_, data) => setForm((v) => ({ ...v, isPaid: data.optionValue === "paid" }))}
+                >
+                  <Option value="paid">Có lương</Option>
+                  <Option value="unpaid">Không lương</Option>
+                </Dropdown>
+              </Field>
+              <Field label="Mô tả">
+                <Textarea resize="vertical" value={form.description} onChange={(_, data) => setForm((v) => ({ ...v, description: data.value }))} />
+              </Field>
+              {editing ? (
+                <FieldError message="Lưu ý: thay đổi quy tắc cấp chỉ ảnh hưởng số dư tạo mới, không đổi số dư đã cấp. Chỉ đổi được đơn vị khi loại nghỉ chưa có đơn/số dư." />
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpen(false)}>Hủy</Button>
+              <Button appearance="primary" disabled={saving} onClick={submit}>
+                {editing ? "Lưu thay đổi" : "Thêm mới"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <ConfirmDialog
+        open={lockTarget !== null}
+        title="Tắt loại nghỉ?"
+        description={`Loại nghỉ "${lockTarget?.leaveTypeName}" sẽ chuyển sang Ngừng hoạt động cho đến khi được bật lại.`}
+        confirmLabel="Tắt loại nghỉ"
+        confirming={locking}
+        onConfirm={confirmLock}
+        onCancel={() => setLockTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Xóa loại nghỉ?"
+        description={
+          <>
+            <div>{`Loại nghỉ "${deleteTarget?.leaveTypeName}" sẽ bị xóa vĩnh viễn.`}</div>
+            {deleteError ? <FieldError message={deleteError} /> : null}
+          </>
+        }
+        confirmLabel="Xóa"
+        confirming={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );
