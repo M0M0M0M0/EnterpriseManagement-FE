@@ -114,7 +114,16 @@ export interface AttendanceRecordDto {
   checkInTime?: string;
   checkOutTime?: string;
   workingHours?: number;
+  // Tóm tắt cả ngày: Present, Late, HalfDay, HalfDayAbsent, Absent, OnLeave, None.
   status: string;
+  // Trạng thái hiệu lực tách theo buổi (SessionStatus) và nguồn (SessionSource) do backend tính; xem types/attendanceHr.ts.
+  morningStatus?: string;
+  afternoonStatus?: string;
+  morningSource?: string;
+  afternoonSource?: string;
+  leaveTypeName?: string;
+  morningNote?: string;
+  afternoonNote?: string;
 }
 
 export interface AttendanceAdjustmentDto {
@@ -127,9 +136,13 @@ export interface AttendanceAdjustmentDto {
   newCheckInTime?: string;
   oldCheckOutTime?: string;
   newCheckOutTime?: string;
+  // Pending (chờ Manager), PendingHr (Manager đã duyệt, chờ người xử lý áp dụng), Approved (đã áp dụng), Rejected.
   status: string;
   approverName?: string;
   approvedAt?: string;
+  processedByName?: string;
+  processedAt?: string;
+  rejectionReason?: string;
 }
 
 export interface SubmitAdjustmentRequest {
@@ -176,6 +189,8 @@ export interface LeaveBalanceDto {
   allocatedTime: number;
   usedTime: number;
   remainingTime: number;
+  // Phần phép đã được hoàn do đi làm lại; usedTime và remainingTime ở trên đã tính phần hoàn này.
+  refundedTime?: number;
 }
 
 export interface LeaveRequestDto {
@@ -219,6 +234,7 @@ export interface ManagerDashboardDto {
   pendingLeaveRequestsCount: number;
   pendingAttendanceAdjustmentsCount: number;
   teamPresentTodayCount: number;
+  teamOnLeaveTodayCount?: number;
   teamAbsentTodayCount: number;
 }
 

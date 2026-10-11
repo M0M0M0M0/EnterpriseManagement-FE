@@ -63,6 +63,19 @@ const AdminSystemPage = lazy(() =>
   import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminSystemApiPage })),
 );
 
+const HrAttendancePage = lazy(() =>
+  import("./pages/HrPages").then((m) => ({ default: m.HrAttendancePage })),
+);
+const HrAttendanceNotesPage = lazy(() =>
+  import("./pages/HrPages").then((m) => ({ default: m.HrAttendanceNotesPage })),
+);
+const HrAdjustmentsPage = lazy(() =>
+  import("./pages/HrPages").then((m) => ({ default: m.HrAdjustmentsPage })),
+);
+const HrLeaveReturnsPage = lazy(() =>
+  import("./pages/HrPages").then((m) => ({ default: m.HrLeaveReturnsPage })),
+);
+
 function RequireAuth({ children }: { children: ReactNode }) {
   const currentRole = useAuthStore((state) => state.role);
   if (!currentRole) return <Navigate to="/login" replace />;
@@ -130,6 +143,10 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/manager/leave", element: <ManagerLeavePage /> },
   { path: "/manager/organization", element: <ManagerOrganizationPage /> },
   { path: "/manager/org-tree", element: <ManagerOrgTreePage /> },
+  { path: "/hr/attendance", element: <HrAttendancePage /> },
+  { path: "/hr/attendance-notes", element: <HrAttendanceNotesPage /> },
+  { path: "/hr/adjustments", element: <HrAdjustmentsPage /> },
+  { path: "/hr/leave-returns", element: <HrLeaveReturnsPage /> },
   { path: "/admin/users", element: <AdminUsersPage /> },
   { path: "/admin/employees", element: <AdminEmployeesPage /> },
   { path: "/admin/departments", element: <AdminDepartmentsPage /> },
