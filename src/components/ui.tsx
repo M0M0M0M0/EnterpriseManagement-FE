@@ -12,7 +12,15 @@ import {
 } from "@fluentui/react-components";
 import { BoxRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
-import { attendanceLabels, getInitials, requestLabels } from "../utils/format";
+import {
+  adjustmentStatusLabels,
+  attendanceLabels,
+  getInitials,
+  requestLabels,
+  returnSessionStateLabels,
+  returnStatusLabels,
+  sessionStatusLabels,
+} from "../utils/format";
 
 export const attendanceColors: Record<string, BadgeProps["color"]> = {
   Present: "success",
@@ -21,6 +29,37 @@ export const attendanceColors: Record<string, BadgeProps["color"]> = {
   HalfDayAbsent: "danger",
   Absent: "danger",
   OnLeave: "informative",
+  None: "subtle",
+};
+
+// Trạng thái từng buổi: Đúng giờ xanh, Đi muộn vàng, Vắng đỏ, Nghỉ phép xám
+const sessionStatusColors: Record<string, BadgeProps["color"]> = {
+  OnTime: "success",
+  Late: "warning",
+  Absent: "danger",
+  OnLeave: "subtle",
+  None: "subtle",
+};
+
+const adjustmentColors: Record<string, BadgeProps["color"]> = {
+  Pending: "warning",
+  PendingHr: "informative",
+  Approved: "success",
+  Rejected: "danger",
+};
+
+const returnStatusColors: Record<string, BadgeProps["color"]> = {
+  PendingManager: "warning",
+  PendingHr: "informative",
+  Completed: "success",
+  Rejected: "danger",
+};
+
+const returnSessionColors: Record<string, BadgeProps["color"]> = {
+  Pending: "warning",
+  AwaitingHr: "informative",
+  Active: "success",
+  Rejected: "danger",
 };
 
 const requestColors: Record<string, BadgeProps["color"]> = {
@@ -37,6 +76,71 @@ export function AttendanceBadge({ status }: { status: string }) {
     <Badge appearance="tint" color={attendanceColors[status] ?? "subtle"} shape="rounded">
       {attendanceLabels[status] ?? status}
     </Badge>
+  );
+}
+
+export function SessionStatusBadge({ status }: { status: string }) {
+  return (
+    <Badge appearance="tint" color={sessionStatusColors[status] ?? "subtle"} shape="rounded">
+      {sessionStatusLabels[status] ?? status}
+    </Badge>
+  );
+}
+
+export function AdjustmentBadge({ status }: { status: string }) {
+  return (
+    <Badge appearance="tint" color={adjustmentColors[status] ?? "subtle"} shape="rounded">
+      {adjustmentStatusLabels[status] ?? status}
+    </Badge>
+  );
+}
+
+export function ReturnStatusBadge({ status }: { status: string }) {
+  return (
+    <Badge appearance="tint" color={returnStatusColors[status] ?? "subtle"} shape="rounded">
+      {returnStatusLabels[status] ?? status}
+    </Badge>
+  );
+}
+
+export function ReturnSessionBadge({ state }: { state: string }) {
+  return (
+    <Badge appearance="tint" color={returnSessionColors[state] ?? "subtle"} shape="rounded" size="small">
+      {returnSessionStateLabels[state] ?? state}
+    </Badge>
+  );
+}
+
+// Hiển thị trạng thái từng buổi (sáng/chiều) kèm ghi chú HR nếu nguồn là Note.
+// Chỉ vẽ khi hai buổi khác nhau; nếu giống nhau thì badge cả ngày đã đủ.
+export function SessionBreakdown({
+  record,
+}: {
+  record: {
+    morningStatus?: string;
+    afternoonStatus?: string;
+    morningSource?: string;
+    afternoonSource?: string;
+    morningNote?: string;
+    afternoonNote?: string;
+  };
+}) {
+  const { morningStatus: m, afternoonStatus: a } = record;
+  if (!m || !a || m === a) return null;
+  const rows = [
+    { label: "Sáng", status: m, source: record.morningSource, note: record.morningNote },
+    { label: "Chiều", status: a, source: record.afternoonSource, note: record.afternoonNote },
+  ];
+  return (
+    <div className="session-breakdown" style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12 }}>
+      {rows.map((row) => (
+        <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span>{row.label}:</span>
+          <SessionStatusBadge status={row.status} />
+          {row.source === "Note" && row.note ? <small>Ghi chú HR: {row.note}</small> : null}
+        </div>
+      ))}
+    </div>
   );
 }
 

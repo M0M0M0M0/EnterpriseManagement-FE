@@ -17,11 +17,16 @@ import {
 import { ArrowDownloadRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import {
+  AdjustmentBadge,
+  AttendanceBadge,
+  ConfirmDialog,
   EmptyState,
   MetricRail,
   PageHeader,
   RequestBadge,
+  ReturnSessionBadge,
   SectionPanel,
+  SessionBreakdown,
 } from "../components/ui";
 import { useNotify } from "../components/useNotify";
 import {
@@ -32,8 +37,10 @@ import {
   leaveRequestApi,
   positionApi,
 } from "../services/api";
+import { leaveReturnApi } from "../services/hrApi";
 import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
+import type { LeaveReturnRequestDto } from "../types/attendanceHr";
 import type {
   AttendanceAdjustmentDto,
   AttendanceRecordDto,
@@ -52,6 +59,7 @@ import {
   formatTime,
   isoDate,
   leaveSessionLabels,
+  sessionNames,
 } from "../utils/format";
 
 function useManagerCode() {
@@ -93,6 +101,9 @@ export function ManagerDashboardPage() {
             tone: data.pendingAttendanceAdjustmentsCount ? "warning" : "success",
           },
           { label: "Có mặt hôm nay", value: data.teamPresentTodayCount, tone: "success" },
+          ...(data.teamOnLeaveTodayCount !== undefined
+            ? [{ label: "Nghỉ phép hôm nay", value: data.teamOnLeaveTodayCount, tone: "brand" as const }]
+            : []),
           {
             label: "Vắng hôm nay",
             value: data.teamAbsentTodayCount,
@@ -241,7 +252,10 @@ export function ManagerAttendancePage() {
     try {
       if (action === "approve") await attendanceApi.approveAdjustment(id);
       else await attendanceApi.rejectAdjustment(id);
-      notify({ ok: true, message: action === "approve" ? "Đã duyệt yêu cầu." : "Đã từ chối yêu cầu." });
+      notify({
+        ok: true,
+        message: action === "approve" ? "Đã xác nhận, yêu cầu chuyển cho HR xử lý." : "Đã từ chối yêu cầu.",
+      });
       loadPending();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -254,7 +268,7 @@ export function ManagerAttendancePage() {
     <div className="page-stack">
       <PageHeader
         title="Quản lý chấm công"
-        description="Xem chấm công theo phòng ban và duyệt yêu cầu chỉnh sửa."
+        description="Xem chấm công theo phòng ban và xác nhận yêu cầu chỉnh sửa. Manager xác nhận nhân viên có mặt, HR sẽ là người áp dụng chỉnh sửa vào dữ liệu."
         action={
           <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
             <Tab value="team">Chấm công team</Tab>
@@ -310,7 +324,10 @@ export function ManagerAttendancePage() {
                       <td>{formatDateTime(r.checkInTime)}</td>
                       <td>{formatDateTime(r.checkOutTime)}</td>
                       <td>{r.workingHours ?? "--"}</td>
-                      <td>{r.status}</td>
+                      <td>
+                        <AttendanceBadge status={r.status} />
+                        <SessionBreakdown record={r} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -333,6 +350,9 @@ export function ManagerAttendancePage() {
                 <small>
                   Đề xuất: {formatDateTime(item.newCheckInTime) } - {formatDateTime(item.newCheckOutTime)}
                 </small>
+                <div>
+                  <AdjustmentBadge status={item.status} />
+                </div>
               </div>
               <div className="review-actions">
                 <Button
@@ -340,7 +360,7 @@ export function ManagerAttendancePage() {
                   disabled={busyId === item.id}
                   onClick={() => review(item.id, "approve")}
                 >
-                  Duyệt
+                  Xác nhận có mặt
                 </Button>
                 <Button disabled={busyId === item.id} onClick={() => review(item.id, "reject")}>
                   Từ chối
@@ -365,13 +385,24 @@ export function ManagerLeavePage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [rejectDialog, setRejectDialog] = useState<LeaveRequestDto | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  // Yêu cầu đi làm lại của người mình quản lý
+  const [returns, setReturns] = useState<LeaveReturnRequestDto[]>([]);
+  const [approveReturn, setApproveReturn] = useState<LeaveReturnRequestDto | null>(null);
+  const [rejectReturn, setRejectReturn] = useState<LeaveReturnRequestDto | null>(null);
+  const [returnReason, setReturnReason] = useState("");
 
   const load = () => {
     setLoading(true);
-    Promise.all([leaveRequestApi.getPending(), leaveRequestApi.getHistory()])
-      .then(([p, h]) => {
+    Promise.all([
+      leaveRequestApi.getPending(),
+      leaveRequestApi.getHistory(),
+      // Lỗi tải yêu cầu đi làm lại (vd. thiếu quyền) thì coi như rỗng
+      leaveReturnApi.getPending().catch(() => [] as LeaveReturnRequestDto[]),
+    ])
+      .then(([p, h, rt]) => {
         setPending(p);
         setHistory(h);
+        setReturns(rt);
       })
       .catch((err) => notify({ ok: false, message: errorMessage(err) }))
       .finally(() => setLoading(false));
@@ -408,6 +439,37 @@ export function ManagerLeavePage() {
     }
   };
 
+  const doApproveReturn = async () => {
+    if (!approveReturn) return;
+    setBusyId(approveReturn.id);
+    try {
+      await leaveReturnApi.approve(approveReturn.id);
+      notify({ ok: true, message: "Đã duyệt yêu cầu đi làm lại." });
+      setApproveReturn(null);
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const doRejectReturn = async () => {
+    if (!rejectReturn) return;
+    setBusyId(rejectReturn.id);
+    try {
+      await leaveReturnApi.reject(rejectReturn.id, returnReason);
+      notify({ ok: true, message: "Đã từ chối yêu cầu đi làm lại." });
+      setRejectReturn(null);
+      setReturnReason("");
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const list = tab === "pending" ? pending : history;
 
   return (
@@ -419,11 +481,48 @@ export function ManagerLeavePage() {
           <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
             <Tab value="pending">Chờ duyệt ({pending.length})</Tab>
             <Tab value="history">Lịch sử</Tab>
+            <Tab value="returns">Yêu cầu đi làm lại ({returns.length})</Tab>
           </TabList>
         }
       />
       {loading ? (
         <Spinner label="Đang tải..." />
+      ) : tab === "returns" ? (
+        returns.length ? (
+          <div className="review-list">
+            {returns.map((item) => (
+              <article key={item.id} className="review-content">
+                <div>
+                  <strong>{item.employeeName}</strong>
+                  <span>
+                    Đi làm lại từ {formatDate(item.fromDate)} · {sessionNames[item.fromSession]}
+                  </span>
+                  <p>{item.reason}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {item.sessions.map((s) => (
+                      <span key={`${s.date}-${s.session}`} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                        <small>
+                          {formatDate(s.date)} {sessionNames[s.session]} (đơn #{s.leaveRequestId})
+                        </small>
+                        <ReturnSessionBadge state={s.state} />
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="review-actions">
+                  <Button appearance="primary" disabled={busyId === item.id} onClick={() => setApproveReturn(item)}>
+                    Duyệt
+                  </Button>
+                  <Button disabled={busyId === item.id} onClick={() => setRejectReturn(item)}>
+                    Từ chối
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="Không có yêu cầu đi làm lại" description="Danh sách sẽ cập nhật khi nhân viên gửi yêu cầu." />
+        )
       ) : list.length ? (
         <div className="review-list">
           {list.map((item) => (
@@ -461,6 +560,40 @@ export function ManagerLeavePage() {
           description="Danh sách sẽ cập nhật khi có đơn mới."
         />
       )}
+
+      <ConfirmDialog
+        open={!!approveReturn}
+        title="Duyệt yêu cầu đi làm lại"
+        description={
+          <p>
+            Các buổi chưa tới sẽ có hiệu lực ngay (hoàn lại phép tương ứng). Các buổi đã bắt đầu sẽ được chuyển cho HR
+            xác nhận trạng thái chấm công.
+          </p>
+        }
+        confirmLabel="Duyệt"
+        confirming={busyId === approveReturn?.id}
+        onConfirm={doApproveReturn}
+        onCancel={() => setApproveReturn(null)}
+      />
+
+      <Dialog open={!!rejectReturn} onOpenChange={(_, data) => !data.open && setRejectReturn(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Từ chối yêu cầu đi làm lại</DialogTitle>
+            <DialogContent className="form-stack">
+              <Field label="Lý do từ chối">
+                <Textarea resize="vertical" value={returnReason} onChange={(_, data) => setReturnReason(data.value)} />
+              </Field>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setRejectReturn(null)}>Hủy</Button>
+              <Button appearance="primary" onClick={doRejectReturn} disabled={busyId === rejectReturn?.id}>
+                Xác nhận từ chối
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       <Dialog open={!!rejectDialog} onOpenChange={(_, data) => !data.open && setRejectDialog(null)}>
         <DialogSurface>

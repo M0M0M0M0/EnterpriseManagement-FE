@@ -48,6 +48,44 @@ export const attendanceLabels: Record<string, string> = {
   HalfDayAbsent: "Vắng nửa buổi sáng",
   Absent: "Vắng mặt",
   OnLeave: "Nghỉ phép",
+  None: "Chưa có dữ liệu",
+};
+
+// Nhãn trạng thái từng buổi (SessionStatus) do backend tính
+export const sessionStatusLabels: Record<string, string> = {
+  OnTime: "Đúng giờ",
+  Late: "Đi muộn",
+  Absent: "Vắng",
+  OnLeave: "Nghỉ phép",
+  None: "--",
+};
+
+export const sessionNames: Record<string, string> = {
+  Morning: "Sáng",
+  Afternoon: "Chiều",
+};
+
+// Yêu cầu điều chỉnh công (2 bước: Manager rồi HR)
+export const adjustmentStatusLabels: Record<string, string> = {
+  Pending: "Chờ Manager duyệt",
+  PendingHr: "Chờ HR xử lý",
+  Approved: "Đã áp dụng",
+  Rejected: "Từ chối",
+};
+
+// Yêu cầu đi làm lại và từng buổi trong yêu cầu
+export const returnStatusLabels: Record<string, string> = {
+  PendingManager: "Chờ Manager duyệt",
+  PendingHr: "Chờ xác nhận",
+  Completed: "Hoàn tất",
+  Rejected: "Từ chối",
+};
+
+export const returnSessionStateLabels: Record<string, string> = {
+  Pending: "Chờ",
+  AwaitingHr: "Chờ xác nhận",
+  Active: "Đã có hiệu lực",
+  Rejected: "Từ chối",
 };
 
 export const requestLabels: Record<string, string> = {
