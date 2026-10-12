@@ -70,6 +70,7 @@ export interface UpdateEmployeeRequest {
 export interface DepartmentDto {
   departmentCode: string;
   departmentName: string;
+  managerCode?: string;
   managerName?: string;
   description?: string;
   isActive: boolean;
@@ -83,9 +84,18 @@ export interface CreateDepartmentRequest {
 }
 
 export interface UpdateDepartmentRequest {
+  // Mã mới của phòng ban (bỏ trống hoặc giống mã cũ thì giữ nguyên).
+  departmentCode?: string;
   departmentName: string;
-  managerId?: number;
+  // Mã nhân viên làm trưởng phòng: không gửi = giữ nguyên, chuỗi rỗng = bỏ trưởng phòng.
+  managerCode?: string;
   description?: string;
+}
+
+// Các giá trị Module và Action đang có trong nhật ký hệ thống (cho ô chọn ở màn lọc).
+export interface AuditLogFilterOptionsDto {
+  modules: string[];
+  actions: string[];
 }
 
 export interface PositionDto {

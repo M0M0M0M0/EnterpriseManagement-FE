@@ -24,6 +24,7 @@ import {
   employeeApi,
   leaveTypeApi,
   positionApi,
+  roleApi,
   userApi,
 } from "../services/api";
 import { errorMessage } from "../services/http";
@@ -34,6 +35,7 @@ import type {
   LeaveTypeDto,
   LeaveUnit,
   PositionDto,
+  RoleDto,
   UserDto,
 } from "../types/domain";
 import { formatCurrency, formatDate, formatDateTime } from "../utils/format";
@@ -60,6 +62,10 @@ export function AdminEmployeesPage() {
   const [accountEmployee, setAccountEmployee] = useState<EmployeeDto | null>(null);
   const [accountForm, setAccountForm] = useState({ username: "", email: "" });
   const [accountSending, setAccountSending] = useState(false);
+  const [roles, setRoles] = useState<RoleDto[]>([]);
+  const [accountRole, setAccountRole] = useState("");
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [rolesError, setRolesError] = useState("");
   const [manageOpen, setManageOpen] = useState(false);
   const [manageEmployee, setManageEmployee] = useState<EmployeeDto | null>(null);
   const [togglingUsername, setTogglingUsername] = useState<string | null>(null);
@@ -226,9 +232,16 @@ export function AdminEmployeesPage() {
 
   const toggleActive = async (employee: EmployeeDto) => {
     try {
-      await employeeApi.setActive(employee.employeeCode, employee.employmentStatus !== "Active");
-      notify({ ok: true, message: "Đã cập nhật trạng thái nhân viên." });
+      const deactivating = employee.employmentStatus === "Active";
+      await employeeApi.setActive(employee.employeeCode, !deactivating);
+      notify({
+        ok: true,
+        message: deactivating
+          ? "Đã cho nghỉ việc và khoá các tài khoản liên quan"
+          : "Đã phục hồi hồ sơ. Tài khoản đăng nhập vẫn đang khoá, hãy mở khoá ở màn Quản lý tài khoản nếu cần.",
+      });
       load();
+      loadUsers();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
     }
@@ -251,20 +264,43 @@ export function AdminEmployeesPage() {
     setAccountEmployee(employee);
     setAccountForm({ username: employee.employeeCode.toLowerCase(), email: employee.email ?? "" });
     setShowPassword(false);
+    setAccountRole("");
+    setRolesError("");
+    setRolesLoading(true);
     setAccountOpen(true);
+    roleApi
+      .getAll()
+      .then((list) => setRoles(list.filter((r) => r.isActive)))
+      .catch((err) => setRolesError(errorMessage(err)))
+      .finally(() => setRolesLoading(false));
   };
 
   const submitAccount = async () => {
     if (!accountEmployee) return;
-    if (!accountForm.username.trim() || !accountForm.email.trim()) {
+    const username = accountForm.username.trim();
+    const email = accountForm.email.trim();
+    if (!username || !email) {
       notify({ ok: false, message: "Vui lòng nhập đủ tên đăng nhập và email." });
+      return;
+    }
+    if (!/^[A-Za-z0-9._-]{3,50}$/.test(username)) {
+      notify({ ok: false, message: "Tên đăng nhập gồm 3-50 ký tự: chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang." });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      notify({ ok: false, message: "Email không đúng định dạng." });
+      return;
+    }
+    if (!accountRole) {
+      notify({ ok: false, message: "Vui lòng chọn vai trò cho tài khoản này." });
       return;
     }
     setAccountSending(true);
     try {
       const result = await userApi.create({
-        username: accountForm.username.trim(),
-        email: accountForm.email.trim(),
+        username,
+        email,
+        roleCode: accountRole,
         employeeCode: accountEmployee.employeeCode,
       });
       setShowPassword(false);
@@ -596,10 +632,22 @@ export function AdminEmployeesPage() {
                   />
                 </Field>
               </div>
-              <p className="field-hint">
-                Vai trò được tự lấy theo chức vụ hiện tại của nhân viên (
-                {accountEmployee?.positionName}). Đổi vai trò mặc định ở màn hình Chức vụ nếu cần.
-              </p>
+              <Field label="Vai trò" required>
+                <Dropdown
+                  placeholder={rolesLoading ? "Đang tải vai trò..." : "Chọn vai trò"}
+                  disabled={rolesLoading}
+                  value={roles.find((r) => r.roleCode === accountRole)?.roleName ?? ""}
+                  selectedOptions={accountRole ? [accountRole] : []}
+                  onOptionSelect={(_, data) => setAccountRole(data.optionValue ?? "")}
+                >
+                  {roles.map((r) => (
+                    <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
+                      {r.roleName}
+                    </Option>
+                  ))}
+                </Dropdown>
+                {rolesError ? <FieldError message={rolesError} /> : null}
+              </Field>
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setAccountOpen(false)}>Huỷ</Button>
@@ -685,7 +733,7 @@ export function AdminEmployeesPage() {
       <ConfirmDialog
         open={lockEmployeeTarget !== null}
         title="Cho nhân viên nghỉ việc?"
-        description={`Nhân viên "${lockEmployeeTarget?.fullName}" sẽ chuyển sang trạng thái Ngừng, không thể chấm công/xin nghỉ nữa cho đến khi được phục hồi lại.`}
+        description={`Nhân viên "${lockEmployeeTarget?.fullName}" sẽ chuyển sang trạng thái Ngừng, không thể chấm công/xin nghỉ nữa cho đến khi được phục hồi lại. Các tài khoản đăng nhập của nhân viên này cũng sẽ bị khoá.`}
         confirmLabel="Cho nghỉ việc"
         confirming={lockingEmployee}
         onConfirm={confirmLockEmployee}
@@ -713,6 +761,12 @@ export function AdminDepartmentsPage() {
   const [deptForm, setDeptForm] = useState({ departmentCode: "", departmentName: "", description: "" });
   const [lockDeptTarget, setLockDeptTarget] = useState<DepartmentDto | null>(null);
   const [lockingDept, setLockingDept] = useState(false);
+  const [employees, setEmployees] = useState<EmployeeDto[]>([]);
+  const [editDept, setEditDept] = useState<DepartmentDto | null>(null);
+  const [editForm, setEditForm] = useState({ departmentCode: "", departmentName: "", managerCode: "", description: "" });
+  const [managerQuery, setManagerQuery] = useState("");
+  const [confirmRename, setConfirmRename] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -738,6 +792,92 @@ export function AdminDepartmentsPage() {
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
+    }
+  };
+
+  const managerLabel = (e: EmployeeDto) => `${e.fullName} (${e.employeeCode})`;
+
+  const openEditDept = (d: DepartmentDto) => {
+    setEditDept(d);
+    setEditForm({
+      departmentCode: d.departmentCode,
+      departmentName: d.departmentName,
+      managerCode: d.managerCode ?? "",
+      description: d.description ?? "",
+    });
+    setConfirmRename(false);
+    setManagerQuery("");
+    // Tải danh sách nhân viên để chọn trưởng phòng
+    employeeApi
+      .getAll()
+      .then((list) => {
+        setEmployees(list);
+        const current = list.find((e) => e.employeeCode === d.managerCode);
+        setManagerQuery(current ? managerLabel(current) : "");
+      })
+      .catch((err) => notify({ ok: false, message: errorMessage(err) }));
+  };
+
+  const handleManagerSelect = (optionValue: string | undefined) => {
+    if (!optionValue || optionValue === NO_MANAGER) {
+      setEditForm((v) => ({ ...v, managerCode: "" }));
+      setManagerQuery("");
+      return;
+    }
+    const emp = employees.find((e) => e.employeeCode === optionValue);
+    setEditForm((v) => ({ ...v, managerCode: optionValue }));
+    setManagerQuery(emp ? managerLabel(emp) : "");
+  };
+
+  const managerSearch = managerQuery.trim().toLowerCase();
+  const managerCandidates = employees.filter(
+    (e) => e.employmentStatus !== "Terminated" || e.employeeCode === editForm.managerCode,
+  );
+  const filteredManagers = managerSearch
+    ? managerCandidates.filter(
+        (e) => e.fullName.toLowerCase().includes(managerSearch) || e.employeeCode.toLowerCase().includes(managerSearch),
+      )
+    : managerCandidates;
+
+  const submitEdit = () => {
+    if (!editDept) return;
+    const newCode = editForm.departmentCode.trim();
+    if (!editForm.departmentName.trim()) {
+      notify({ ok: false, message: "Vui lòng nhập tên phòng ban." });
+      return;
+    }
+    if (!/^[A-Za-z0-9_-]{2,20}$/.test(newCode)) {
+      notify({ ok: false, message: "Mã phòng ban gồm 2-20 ký tự: chữ không dấu, số, _ hoặc -." });
+      return;
+    }
+    if (newCode !== editDept.departmentCode) {
+      setConfirmRename(true);
+      return;
+    }
+    void saveEdit();
+  };
+
+  const saveEdit = async () => {
+    if (!editDept) return;
+    const newCode = editForm.departmentCode.trim();
+    setSavingEdit(true);
+    try {
+      await departmentApi.update(editDept.departmentCode, {
+        departmentCode: newCode !== editDept.departmentCode ? newCode : undefined,
+        departmentName: editForm.departmentName.trim(),
+        // Luôn gửi mã hiện tại (rỗng = bỏ trưởng phòng) để không bị xoá nhầm
+        managerCode: editForm.managerCode,
+        description: editForm.description.trim(),
+      });
+      notify({ ok: true, message: "Đã cập nhật phòng ban." });
+      setConfirmRename(false);
+      setEditDept(null);
+      load();
+    } catch (err) {
+      setConfirmRename(false);
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -788,6 +928,9 @@ export function AdminDepartmentsPage() {
                   <Badge appearance="tint" color={d.isActive ? "success" : "subtle"}>
                     {d.isActive ? "Hoạt động" : "Ngừng"}
                   </Badge>
+                  <Button size="small" onClick={() => openEditDept(d)}>
+                    Sửa
+                  </Button>
                   <Button
                     size="small"
                     onClick={() => (d.isActive ? setLockDeptTarget(d) : toggleDepartment(d))}
@@ -825,6 +968,75 @@ export function AdminDepartmentsPage() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+
+      <Dialog
+        open={editDept !== null}
+        onOpenChange={(_, data) => {
+          if (!data.open) setEditDept(null);
+        }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Sửa phòng ban</DialogTitle>
+            <DialogContent className="form-stack">
+              <Field label="Mã phòng ban" required>
+                <Input
+                  value={editForm.departmentCode}
+                  onChange={(_, data) => setEditForm((v) => ({ ...v, departmentCode: data.value }))}
+                />
+              </Field>
+              <Field label="Tên phòng ban" required>
+                <Input
+                  value={editForm.departmentName}
+                  onChange={(_, data) => setEditForm((v) => ({ ...v, departmentName: data.value }))}
+                />
+              </Field>
+              <Field label="Trưởng phòng">
+                <Combobox
+                  freeform
+                  value={managerQuery}
+                  selectedOptions={[editForm.managerCode || NO_MANAGER]}
+                  placeholder="Gõ tên hoặc mã nhân viên để tìm..."
+                  onChange={(event) => setManagerQuery(event.target.value)}
+                  onOptionSelect={(_, data) => handleManagerSelect(data.optionValue)}
+                >
+                  <Option value={NO_MANAGER} text="Không có">
+                    Không có
+                  </Option>
+                  {filteredManagers.map((m) => (
+                    <Option key={m.employeeCode} value={m.employeeCode} text={managerLabel(m)}>
+                      {managerLabel(m)}
+                    </Option>
+                  ))}
+                </Combobox>
+              </Field>
+              <Field label="Mô tả">
+                <Textarea
+                  resize="vertical"
+                  value={editForm.description}
+                  onChange={(_, data) => setEditForm((v) => ({ ...v, description: data.value }))}
+                />
+              </Field>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setEditDept(null)}>Huỷ</Button>
+              <Button appearance="primary" onClick={submitEdit} disabled={savingEdit}>
+                {savingEdit ? <Spinner size="tiny" /> : "Lưu thay đổi"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirmRename}
+        title="Đổi mã phòng ban?"
+        description="Đổi mã phòng ban có thể ảnh hưởng đến báo cáo hoặc tích hợp đang dùng mã cũ. Bạn có chắc không?"
+        confirmLabel="Vẫn đổi mã"
+        confirming={savingEdit}
+        onConfirm={saveEdit}
+        onCancel={() => setConfirmRename(false)}
+      />
 
       <ConfirmDialog
         open={lockDeptTarget !== null}

@@ -17,6 +17,7 @@ import type {
   EmployeeDashboardDto,
   EmployeeDto,
   AuditLogDto,
+  AuditLogFilterOptionsDto,
   AuditLogFilters,
   LeaveBalanceDto,
   LeaveRequestDto,
@@ -212,4 +213,6 @@ export const auditApi = {
     const query = params.toString();
     return http.get<AuditLogDto[]>(`/audit-logs${query ? `?${query}` : ""}`);
   },
+  // Danh sách Module và Action đang có trong nhật ký, cho ô chọn ở màn hình lọc.
+  getFilterOptions: () => http.get<AuditLogFilterOptionsDto>("/audit-logs/filters"),
 };

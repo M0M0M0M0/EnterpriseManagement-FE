@@ -4,9 +4,10 @@ import {
   AccordionItem,
   AccordionPanel,
   Badge,
+  Button,
   Checkbox,
 } from "@fluentui/react-components";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { PermissionDto } from "../types/domain";
 import { EmptyState } from "./ui";
 
@@ -92,6 +93,8 @@ export function PermissionGroupEditor({
 }) {
   const groups = useMemo(() => buildPermissionGroups(permissions), [permissions]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+  // Mặc định thu gọn hết để form ngắn; người dùng mở từng nhóm hoặc mở/thu gọn tất cả.
+  const [openItems, setOpenItems] = useState<string[]>([]);
 
   if (!groups.length) {
     return <EmptyState title="Chưa có permission" description="Tạo permission trước khi gán cho role." />;
@@ -108,7 +111,21 @@ export function PermissionGroupEditor({
   };
 
   return (
-    <Accordion multiple collapsible defaultOpenItems={groups.map((group) => group.key)}>
+    <>
+    <div className="table-actions">
+      <Button size="small" onClick={() => setOpenItems(groups.map((group) => group.key))}>
+        Mở rộng tất cả
+      </Button>
+      <Button size="small" onClick={() => setOpenItems([])}>
+        Thu gọn tất cả
+      </Button>
+    </div>
+    <Accordion
+      multiple
+      collapsible
+      openItems={openItems}
+      onToggle={(_, data) => setOpenItems(data.openItems as string[])}
+    >
       {groups.map((group) => {
         const groupPermissions = [...group.pagePermissions, ...group.actionPermissions];
         const checkedCount = groupPermissions.filter((p) => selectedSet.has(p.permissionCode)).length;
@@ -118,11 +135,9 @@ export function PermissionGroupEditor({
             <AccordionHeader>
               <span className="permission-group-title">
                 {group.label}
-                {checkedCount > 0 ? (
-                  <Badge appearance="tint" color="brand" size="small">
-                    {checkedCount}
-                  </Badge>
-                ) : null}
+                <Badge appearance="tint" color={checkedCount > 0 ? "brand" : "informative"} size="small">
+                  {checkedCount}/{groupPermissions.length}
+                </Badge>
               </span>
             </AccordionHeader>
             <AccordionPanel>
@@ -159,5 +174,6 @@ export function PermissionGroupEditor({
         );
       })}
     </Accordion>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import {
   Badge,
   Button,
+  Combobox,
   Dialog,
   DialogActions,
   DialogBody,
@@ -28,9 +29,9 @@ import { useEffect, useState } from "react";
 import { PermissionGroupEditor } from "../components/PermissionGroupEditor";
 import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
-import { auditApi, menuApi, permissionApi, roleApi, userApi } from "../services/api";
+import { auditApi, employeeApi, menuApi, permissionApi, roleApi, userApi } from "../services/api";
 import { ApiError, errorMessage } from "../services/http";
-import type { AuditLogDto, MenuDto, PermissionDto, RoleDto, UserDto } from "../types/domain";
+import type { AuditLogDto, AuditLogFilterOptionsDto, EmployeeDto, MenuDto, PermissionDto, RoleDto, UserDto } from "../types/domain";
 
 function useAllRoles() {
   const notify = useNotify();
@@ -61,6 +62,54 @@ function joinCodes(value?: string[]) {
   return value?.join(", ") ?? "";
 }
 
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NO_EMPLOYEE = "__none__";
+
+// Ô chọn nhân viên liên kết có tìm kiếm theo mã/tên; mã đang gán mà không có trong danh sách vẫn được giữ lại.
+function EmployeePicker({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: EmployeeDto[];
+  value: string;
+  onChange: (code: string) => void;
+}) {
+  const [query, setQuery] = useState<string | null>(null);
+  const known = employees.find((e) => e.employeeCode === value);
+  const label = value ? (known ? `${known.employeeCode} - ${known.fullName}` : value) : "";
+  const options = employees.map((e) => ({ code: e.employeeCode, text: `${e.employeeCode} - ${e.fullName}` }));
+  if (value && !known) options.unshift({ code: value, text: value });
+  const keyword = (query ?? "").trim().toLowerCase();
+  const visible = keyword ? options.filter((o) => o.text.toLowerCase().includes(keyword)) : options;
+
+  return (
+    <Combobox
+      placeholder="Không liên kết nhân viên"
+      value={query ?? label}
+      selectedOptions={[value || NO_EMPLOYEE]}
+      onChange={(event) => setQuery(event.target.value)}
+      onOptionSelect={(_, data) => {
+        onChange(data.optionValue === NO_EMPLOYEE ? "" : (data.optionValue ?? ""));
+        setQuery(null);
+      }}
+      onOpenChange={(_, data) => {
+        if (!data.open) setQuery(null);
+      }}
+    >
+      <Option value={NO_EMPLOYEE} text="">
+        Không liên kết nhân viên
+      </Option>
+      {visible.map((o) => (
+        <Option key={o.code} value={o.code} text={o.text}>
+          {o.text}
+        </Option>
+      ))}
+    </Combobox>
+  );
+}
+
 function UnavailableState({ description }: { description: string }) {
   return <EmptyState title="Chưa khả dụng" description={description} />;
 }
@@ -84,10 +133,16 @@ export function AdminUsersApiPage() {
     username: "",
     email: "",
     roleCode: "",
-    roleCodes: "EMPLOYEE",
+    roleCodes: [] as string[],
     employeeCode: "",
   });
   const [filters, setFilters] = useState({ employeeCode: "", employeeName: "" });
+  const [employees, setEmployees] = useState<EmployeeDto[]>([]);
+  const activeRoles = roles.filter((r) => r.isActive);
+
+  useEffect(() => {
+    employeeApi.getAll().then(setEmployees).catch(() => setEmployees([]));
+  }, []);
 
   const loadUsers = () => {
     setLoadingUsers(true);
@@ -116,8 +171,8 @@ export function AdminUsersApiPage() {
     setUserForm({
       username: "",
       email: "",
-      roleCode: roles[0]?.roleCode ?? "",
-      roleCodes: "EMPLOYEE",
+      roleCode: activeRoles.find((r) => r.roleCode === "EMPLOYEE")?.roleCode ?? activeRoles[0]?.roleCode ?? "",
+      roleCodes: [],
       employeeCode: "",
     });
     setUserOpen(true);
@@ -129,7 +184,7 @@ export function AdminUsersApiPage() {
       username: user.username,
       email: user.email,
       roleCode: "",
-      roleCodes: user.roles.join(", "),
+      roleCodes: user.roles,
       employeeCode: user.employeeCode ?? "",
     });
     setUserOpen(true);
@@ -140,23 +195,38 @@ export function AdminUsersApiPage() {
       notify({ ok: false, message: "Vui lòng nhập đủ tên đăng nhập và email." });
       return;
     }
+    if (!editingUser && !USERNAME_PATTERN.test(userForm.username.trim())) {
+      notify({
+        ok: false,
+        message: "Tên đăng nhập dài 3-50 ký tự, chỉ gồm chữ không dấu, số, dấu chấm, gạch dưới và gạch ngang.",
+      });
+      return;
+    }
+    if (!EMAIL_PATTERN.test(userForm.email.trim())) {
+      notify({ ok: false, message: "Email không đúng định dạng." });
+      return;
+    }
     if (!editingUser && !userForm.roleCode) {
       notify({ ok: false, message: "Vui lòng chọn vai trò cho tài khoản này." });
+      return;
+    }
+    if (editingUser && !userForm.roleCodes.length) {
+      notify({ ok: false, message: "Tài khoản phải có ít nhất một vai trò." });
       return;
     }
     setSending(true);
     try {
       if (editingUser) {
         await userApi.update(editingUser.username, {
-          email: userForm.email,
+          email: userForm.email.trim(),
           employeeCode: userForm.employeeCode || undefined,
-          roleCodes: splitCodes(userForm.roleCodes),
+          roleCodes: userForm.roleCodes,
         });
         notify({ ok: true, message: "Đã cập nhật tài khoản." });
       } else {
         const result = await userApi.create({
-          username: userForm.username,
-          email: userForm.email,
+          username: userForm.username.trim(),
+          email: userForm.email.trim(),
           roleCode: userForm.roleCode,
           employeeCode: userForm.employeeCode || undefined,
         });
@@ -365,7 +435,7 @@ export function AdminUsersApiPage() {
             <DialogTitle>{editingUser ? "Sửa tài khoản" : "Tạo tài khoản mới"}</DialogTitle>
             <DialogContent className="form-stack">
               <div className="form-grid">
-                <Field label="Tên đăng nhập" required>
+                <Field label="Tên đăng nhập" required hint={editingUser ? undefined : "3-50 ký tự: chữ không dấu, số, ., _, -"}>
                   <Input
                     value={userForm.username}
                     disabled={Boolean(editingUser)}
@@ -378,16 +448,29 @@ export function AdminUsersApiPage() {
               </div>
               {editingUser ? (
                 <div className="form-grid">
-                  <Field label="Vai trò, phân tách bằng dấu phẩy" required>
-                    <Input
-                      value={userForm.roleCodes}
-                      onChange={(_, data) => setUserForm((value) => ({ ...value, roleCodes: data.value }))}
-                    />
+                  <Field label="Vai trò" required hint="Chọn ít nhất một vai trò.">
+                    <Dropdown
+                      multiselect
+                      value={userForm.roleCodes.map((c) => roles.find((r) => r.roleCode === c)?.roleName ?? c).join(", ")}
+                      selectedOptions={userForm.roleCodes}
+                      onOptionSelect={(_, data) => setUserForm((value) => ({ ...value, roleCodes: data.selectedOptions }))}
+                    >
+                      {[
+                        ...activeRoles,
+                        // Vai trò đang gán nhưng đã bị khoá vẫn hiển thị để không mất dữ liệu khi lưu.
+                        ...roles.filter((r) => !r.isActive && userForm.roleCodes.includes(r.roleCode)),
+                      ].map((r) => (
+                        <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
+                          {r.roleName}
+                        </Option>
+                      ))}
+                    </Dropdown>
                   </Field>
                   <Field label="Mã nhân viên liên kết">
-                    <Input
+                    <EmployeePicker
+                      employees={employees}
                       value={userForm.employeeCode}
-                      onChange={(_, data) => setUserForm((value) => ({ ...value, employeeCode: data.value }))}
+                      onChange={(code) => setUserForm((value) => ({ ...value, employeeCode: code }))}
                     />
                   </Field>
                 </div>
@@ -399,18 +482,19 @@ export function AdminUsersApiPage() {
                       selectedOptions={[userForm.roleCode]}
                       onOptionSelect={(_, data) => setUserForm((value) => ({ ...value, roleCode: data.optionValue ?? "" }))}
                     >
-                      {roles.map((r) => (
+                      {activeRoles.map((r) => (
                         <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
                           {r.roleName}
                         </Option>
                       ))}
                     </Dropdown>
-                    {!roles.length ? <FieldError message="Chưa có role nào được cấu hình." /> : null}
+                    {!activeRoles.length ? <FieldError message="Chưa có role nào được cấu hình." /> : null}
                   </Field>
                   <Field label="Mã nhân viên liên kết" hint="Bỏ trống nếu tạo tài khoản không gắn nhân viên (vd tài khoản hệ thống).">
-                    <Input
+                    <EmployeePicker
+                      employees={employees}
                       value={userForm.employeeCode}
-                      onChange={(_, data) => setUserForm((value) => ({ ...value, employeeCode: data.value }))}
+                      onChange={(code) => setUserForm((value) => ({ ...value, employeeCode: code }))}
                     />
                   </Field>
                 </div>
@@ -444,22 +528,24 @@ export function AdminAuditLogApiPage() {
   const [logs, setLogs] = useState<AuditLogDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [unavailable, setUnavailable] = useState(false);
-  const [filters, setFilters] = useState({
-    username: "",
-    module: "",
-    action: "",
-    date: "",
-  });
+  const emptyFilters = { username: "", module: "", action: "", date: "" };
+  const [filters, setFilters] = useState(emptyFilters);
+  const [filterOptions, setFilterOptions] = useState<AuditLogFilterOptionsDto | null>(null);
 
-  const load = () => {
+  useEffect(() => {
+    // Lỗi tải danh sách lọc thì ẩn ô chọn tương ứng, không ảnh hưởng phần còn lại của trang.
+    auditApi.getFilterOptions().then(setFilterOptions).catch(() => setFilterOptions(null));
+  }, []);
+
+  const load = (current = filters) => {
     setLoading(true);
     setUnavailable(false);
     auditApi
       .getAll({
-        username: filters.username || undefined,
-        module: filters.module || undefined,
-        action: filters.action || undefined,
-        date: filters.date || undefined,
+        username: current.username || undefined,
+        module: current.module || undefined,
+        action: current.action || undefined,
+        date: current.date || undefined,
       })
       .then(setLogs)
       .catch((err) => {
@@ -473,7 +559,30 @@ export function AdminAuditLogApiPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => load(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasFilters = Object.values(filters).some(Boolean);
+  const clearFilters = () => {
+    setFilters(emptyFilters);
+    load(emptyFilters);
+  };
+
+  const filterSelect = (key: "module" | "action", items: string[]) => (
+    <Dropdown
+      value={filters[key] || "Tất cả"}
+      selectedOptions={[filters[key]]}
+      onOptionSelect={(_, data) => setFilters((value) => ({ ...value, [key]: data.optionValue ?? "" }))}
+    >
+      <Option value="" text="Tất cả">
+        Tất cả
+      </Option>
+      {items.map((item) => (
+        <Option key={item} value={item} text={item}>
+          {item}
+        </Option>
+      ))}
+    </Dropdown>
+  );
 
   return (
     <div className="page-stack">
@@ -483,18 +592,15 @@ export function AdminAuditLogApiPage() {
           <Field label="Người dùng">
             <Input value={filters.username} onChange={(_, data) => setFilters((value) => ({ ...value, username: data.value }))} />
           </Field>
-          <Field label="Phân hệ">
-            <Input value={filters.module} onChange={(_, data) => setFilters((value) => ({ ...value, module: data.value }))} />
-          </Field>
-          <Field label="Hành động">
-            <Input value={filters.action} onChange={(_, data) => setFilters((value) => ({ ...value, action: data.value }))} />
-          </Field>
+          {filterOptions?.modules.length ? <Field label="Phân hệ">{filterSelect("module", filterOptions.modules)}</Field> : null}
+          {filterOptions?.actions.length ? <Field label="Hành động">{filterSelect("action", filterOptions.actions)}</Field> : null}
           <Field label="Ngày">
             <Input type="date" value={filters.date} onChange={(_, data) => setFilters((value) => ({ ...value, date: data.value }))} />
           </Field>
-          <Button appearance="primary" onClick={load}>
+          <Button appearance="primary" onClick={() => load()}>
             Lọc
           </Button>
+          {hasFilters ? <Button onClick={clearFilters}>Xoá lọc</Button> : null}
         </div>
       </SectionPanel>
       <SectionPanel>
@@ -580,6 +686,11 @@ export function AdminSystemApiPage() {
   });
 
   const [sending, setSending] = useState(false);
+
+  // Danh sách phân hệ duy nhất từ các quyền hiện có, kèm giá trị đang sửa để không mất dữ liệu.
+  const moduleOptions = Array.from(
+    new Set([...permissions.map((p) => p.module), permissionForm.module].filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
 
   const loadMenus = () => {
     setLoadingMenus(true);
@@ -1128,7 +1239,21 @@ export function AdminSystemApiPage() {
                 </Field>
               </div>
               <Field label="Phân hệ" required>
-                <Input value={permissionForm.module} onChange={(_, data) => setPermissionForm((value) => ({ ...value, module: data.value }))} />
+                {moduleOptions.length ? (
+                  <Dropdown
+                    value={permissionForm.module}
+                    selectedOptions={[permissionForm.module]}
+                    onOptionSelect={(_, data) => setPermissionForm((value) => ({ ...value, module: data.optionValue ?? "" }))}
+                  >
+                    {moduleOptions.map((item) => (
+                      <Option key={item} value={item} text={item}>
+                        {item}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                ) : (
+                  <Input value={permissionForm.module} onChange={(_, data) => setPermissionForm((value) => ({ ...value, module: data.value }))} />
+                )}
               </Field>
               <Field label="Mô tả">
                 <Textarea value={permissionForm.description} onChange={(_, data) => setPermissionForm((value) => ({ ...value, description: data.value }))} />
