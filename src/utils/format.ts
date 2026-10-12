@@ -67,15 +67,15 @@ export const sessionNames: Record<string, string> = {
 
 // Yêu cầu điều chỉnh công (2 bước: Manager rồi HR)
 export const adjustmentStatusLabels: Record<string, string> = {
-  Pending: "Chờ Manager duyệt",
-  PendingHr: "Chờ HR xử lý",
+  Pending: "Chờ quản lý duyệt",
+  PendingHr: "Chờ nhân sự xử lý",
   Approved: "Đã áp dụng",
   Rejected: "Từ chối",
 };
 
 // Yêu cầu đi làm lại và từng buổi trong yêu cầu
 export const returnStatusLabels: Record<string, string> = {
-  PendingManager: "Chờ Manager duyệt",
+  PendingManager: "Chờ quản lý duyệt",
   PendingHr: "Chờ xác nhận",
   Completed: "Hoàn tất",
   Rejected: "Từ chối",
@@ -94,7 +94,7 @@ export const requestLabels: Record<string, string> = {
   Confirmed: "Đã xác nhận",
   Completed: "Hoàn tất",
   Rejected: "Từ chối",
-  Cancelled: "Đã hủy",
+  Cancelled: "Đã huỷ",
 };
 
 export function formatCurrency(value: number) {

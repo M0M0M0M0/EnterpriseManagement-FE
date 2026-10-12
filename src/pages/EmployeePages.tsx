@@ -105,7 +105,7 @@ export function EmployeeDashboardPage() {
     return (
       <EmptyState
         title="Tài khoản chưa gắn hồ sơ nhân viên"
-        description="Liên hệ Admin để được liên kết hồ sơ nhân viên."
+        description="Liên hệ quản trị viên để được liên kết hồ sơ nhân viên."
       />
     );
   if (loading || !data) return <Spinner label="Đang tải dashboard..." />;
@@ -116,7 +116,7 @@ export function EmployeeDashboardPage() {
       const record = await attendanceApi.punch();
       notify({
         ok: true,
-        message: record.checkOutTime ? "Check-out thành công." : "Check-in thành công.",
+        message: record.checkOutTime ? "Ra ca thành công." : "Vào ca thành công.",
       });
       load();
     } catch (err) {
@@ -260,7 +260,7 @@ export function EmployeeAttendancePage() {
       const record = await attendanceApi.punch();
       notify({
         ok: true,
-        message: record.checkOutTime ? "Check-out thành công." : "Check-in thành công.",
+        message: record.checkOutTime ? "Ra ca thành công." : "Vào ca thành công.",
       });
       load();
     } catch (err) {
@@ -493,7 +493,7 @@ export function EmployeeAttendancePage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setDialogOpen(false)}>Hủy</Button>
+              <Button onClick={() => setDialogOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={send} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : "Gửi yêu cầu"}
               </Button>
@@ -625,7 +625,7 @@ export function EmployeeLeavePage() {
   const cancel = async (id: number) => {
     try {
       await leaveRequestApi.cancel(id);
-      notify({ ok: true, message: "Đã hủy đơn nghỉ phép." });
+      notify({ ok: true, message: "Đã huỷ đơn nghỉ phép." });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -693,7 +693,7 @@ export function EmployeeLeavePage() {
                       <RequestBadge status={item.status} />
                       {item.status === "Pending" ? (
                         <Button size="small" onClick={() => cancel(item.id)}>
-                          Hủy
+                          Huỷ
                         </Button>
                       ) : null}
                     </div>
@@ -768,7 +768,7 @@ export function EmployeeLeavePage() {
                 ))}
               </div>
             ) : (
-              <EmptyState title="Chưa có số dư" description="Số dư nghỉ phép sẽ hiển thị sau khi Admin cấu hình." />
+              <EmptyState title="Chưa có số dư" description="Số dư nghỉ phép sẽ hiển thị sau khi quản trị viên cấu hình." />
             )}
           </SectionPanel>
         </>
@@ -881,7 +881,7 @@ export function EmployeeLeavePage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpen(false)}>Hủy</Button>
+              <Button onClick={() => setOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submit} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : "Gửi đơn"}
               </Button>
@@ -1018,7 +1018,7 @@ function ReturnLeaveDialog({
             </Field>
           </DialogContent>
           <DialogActions>
-            <Button onClick={onClose}>Hủy</Button>
+            <Button onClick={onClose}>Huỷ</Button>
             <Button appearance="primary" onClick={submit} disabled={sending || previewing || !preview}>
               {sending ? <Spinner size="tiny" /> : "Gửi yêu cầu"}
             </Button>

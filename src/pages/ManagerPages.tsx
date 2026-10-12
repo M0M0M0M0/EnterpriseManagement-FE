@@ -254,7 +254,7 @@ export function ManagerAttendancePage() {
       else await attendanceApi.rejectAdjustment(id);
       notify({
         ok: true,
-        message: action === "approve" ? "Đã xác nhận, yêu cầu chuyển cho HR xử lý." : "Đã từ chối yêu cầu.",
+        message: action === "approve" ? "Đã xác nhận, yêu cầu chuyển cho nhân sự xử lý." : "Đã từ chối yêu cầu.",
       });
       loadPending();
     } catch (err) {
@@ -268,7 +268,7 @@ export function ManagerAttendancePage() {
     <div className="page-stack">
       <PageHeader
         title="Quản lý chấm công"
-        description="Xem chấm công theo phòng ban và xác nhận yêu cầu chỉnh sửa. Manager xác nhận nhân viên có mặt, HR sẽ là người áp dụng chỉnh sửa vào dữ liệu."
+        description="Xem chấm công theo phòng ban và xác nhận yêu cầu chỉnh sửa. Quản lý xác nhận nhân viên có mặt, bộ phận nhân sự sẽ là người áp dụng chỉnh sửa vào dữ liệu."
         action={
           <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
             <Tab value="team">Chấm công team</Tab>
@@ -566,7 +566,7 @@ export function ManagerLeavePage() {
         title="Duyệt yêu cầu đi làm lại"
         description={
           <p>
-            Các buổi chưa tới sẽ có hiệu lực ngay (hoàn lại phép tương ứng). Các buổi đã bắt đầu sẽ được chuyển cho HR
+            Các buổi chưa tới sẽ có hiệu lực ngay (hoàn lại phép tương ứng). Các buổi đã bắt đầu sẽ được chuyển cho nhân sự
             xác nhận trạng thái chấm công.
           </p>
         }
@@ -586,7 +586,7 @@ export function ManagerLeavePage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setRejectReturn(null)}>Hủy</Button>
+              <Button onClick={() => setRejectReturn(null)}>Huỷ</Button>
               <Button appearance="primary" onClick={doRejectReturn} disabled={busyId === rejectReturn?.id}>
                 Xác nhận từ chối
               </Button>
@@ -605,7 +605,7 @@ export function ManagerLeavePage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setRejectDialog(null)}>Hủy</Button>
+              <Button onClick={() => setRejectDialog(null)}>Huỷ</Button>
               <Button appearance="primary" onClick={reject}>
                 Xác nhận từ chối
               </Button>

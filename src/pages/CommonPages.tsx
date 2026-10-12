@@ -282,8 +282,8 @@ export function ProfilePage() {
             <div>
               <strong>Cần thay đổi thông tin?</strong>
               <p>
-                Backend hiện chỉ cho phép Admin chỉnh sửa hồ sơ nhân viên. Liên hệ
-                Admin để cập nhật thông tin cá nhân.
+                Hiện chỉ quản trị viên được chỉnh sửa hồ sơ nhân viên. Liên hệ
+                quản trị viên để cập nhật thông tin cá nhân.
               </p>
             </div>
           </div>

@@ -53,7 +53,7 @@ const sessionStatusColors: Record<string, BadgeProps["color"]> = {
 };
 
 const sourceLabels: Record<string, string> = {
-  Note: "Ghi chú của HR",
+  Note: "Ghi chú của nhân sự",
   ReturnConfirmed: "Xác nhận đi làm lại",
 };
 
@@ -531,7 +531,7 @@ function HrRejectDialog({
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
 
-  // Mỗi lần mở lại thì xóa lý do cũ.
+  // Mỗi lần mở lại thì xoá lý do cũ.
   useEffect(() => {
     if (open) {
       setReason("");
@@ -557,7 +557,7 @@ function HrRejectDialog({
           </DialogContent>
           <DialogActions>
             <Button onClick={onCancel} disabled={sending}>
-              Hủy
+              Huỷ
             </Button>
             <Button appearance="primary" onClick={submit} disabled={sending}>
               {sending ? <Spinner size="tiny" /> : "Từ chối"}
@@ -629,7 +629,7 @@ export function HrAdjustmentsPage() {
     <div className="page-stack">
       <PageHeader
         title="Xử lý điều chỉnh công"
-        description="Các yêu cầu điều chỉnh công đã được Manager duyệt, chờ áp dụng."
+        description="Các yêu cầu điều chỉnh công đã được quản lý duyệt, chờ áp dụng."
       />
       {loading ? (
         <Spinner label="Đang tải..." />
@@ -646,7 +646,7 @@ export function HrAdjustmentsPage() {
                 </small>
                 <br />
                 <small>
-                  Manager duyệt: {item.approverName ?? "--"}
+                  quản lý duyệt: {item.approverName ?? "--"}
                   {item.approvedAt ? ` (${formatDateTime(item.approvedAt)})` : ""}
                 </small>
               </div>
@@ -692,7 +692,7 @@ export function HrAdjustmentsPage() {
 // ---------------------------------------------------------------------------
 
 const returnStateLabels: Record<string, string> = {
-  Pending: "Chờ Manager",
+  Pending: "Chờ quản lý",
   AwaitingHr: "Chờ xác nhận",
   Active: "Đã có hiệu lực",
   Rejected: "Từ chối",
@@ -796,7 +796,7 @@ export function HrLeaveReturnsPage() {
                 </span>
                 <p>{item.reason}</p>
                 <small>
-                  Manager duyệt: {item.managerName ?? "--"}
+                  quản lý duyệt: {item.managerName ?? "--"}
                   {item.managerApprovedAt ? ` (${formatDateTime(item.managerApprovedAt)})` : ""}
                   {" · "}
                   {item.sessions.filter((s) => s.state === "AwaitingHr").length} buổi chờ xác nhận

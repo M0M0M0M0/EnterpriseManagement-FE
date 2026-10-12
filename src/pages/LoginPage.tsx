@@ -81,7 +81,7 @@ export function LoginPage() {
           </li>
           <li>
             <ShieldCheckmarkRegular />
-            <span>Phân quyền Employee / Manager / Admin</span>
+            <span>Phân quyền nhân viên / quản lý / quản trị viên</span>
           </li>
           <li>
             <PeopleTeamRegular />

@@ -568,7 +568,7 @@ export function AdminEmployeesPage() {
               </div>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpen(false)}>Hủy</Button>
+              <Button onClick={() => setOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submit} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : editing ? "Lưu thay đổi" : "Thêm nhân viên"}
               </Button>
@@ -602,7 +602,7 @@ export function AdminEmployeesPage() {
               </p>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setAccountOpen(false)}>Hủy</Button>
+              <Button onClick={() => setAccountOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submitAccount} disabled={accountSending}>
                 {accountSending ? <Spinner size="tiny" /> : "Tạo tài khoản"}
               </Button>
@@ -817,7 +817,7 @@ export function AdminDepartmentsPage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setDeptOpen(false)}>Hủy</Button>
+              <Button onClick={() => setDeptOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={createDepartment}>
                 Thêm mới
               </Button>
@@ -936,7 +936,7 @@ export function AdminPositionsPage() {
     <div className="page-stack">
       <PageHeader
         title="Chức vụ"
-        description="Toàn quyền tạo, sửa, khóa/mở chức vụ — chỉ là chức danh hiển thị, không gắn với role. Role được chọn riêng khi tạo tài khoản."
+        description="Toàn quyền tạo, sửa, khóa/mở chức vụ — chỉ là chức danh hiển thị, không gắn với vai trò. Vai trò được chọn riêng khi tạo tài khoản."
         action={
           <Button appearance="primary" icon={<AddRegular />} onClick={openCreatePosition}>
             Thêm chức vụ
@@ -1003,7 +1003,7 @@ export function AdminPositionsPage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setPosOpen(false)}>Hủy</Button>
+              <Button onClick={() => setPosOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submitPosition}>
                 {editingPosition ? "Lưu thay đổi" : "Thêm mới"}
               </Button>
@@ -1169,12 +1169,12 @@ export function AdminLeaveTypesPage() {
     setDeleteError("");
     try {
       await leaveTypeApi.remove(deleteTarget.leaveTypeCode);
-      notify({ ok: true, message: "Đã xóa loại nghỉ phép." });
+      notify({ ok: true, message: "Đã xoá loại nghỉ phép." });
       setDeleteTarget(null);
       load();
     } catch (err) {
-      // Giữ dialog mở và hiện nguyên văn message backend kèm gợi ý tắt thay vì xóa
-      setDeleteError(`${errorMessage(err)} Hãy tắt loại nghỉ này thay vì xóa.`);
+      // Giữ dialog mở và hiện nguyên văn message backend kèm gợi ý tắt thay vì xoá
+      setDeleteError(`${errorMessage(err)} Hãy tắt loại nghỉ này thay vì xoá.`);
     } finally {
       setDeleting(false);
     }
@@ -1184,7 +1184,7 @@ export function AdminLeaveTypesPage() {
     <div className="page-stack">
       <PageHeader
         title="Loại nghỉ phép"
-        description="Tạo, sửa, bật/tắt, xóa loại nghỉ và quy tắc cấp số dư."
+        description="Tạo, sửa, bật/tắt, xoá loại nghỉ và quy tắc cấp số dư."
         action={
           <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
             Thêm loại nghỉ
@@ -1223,7 +1223,7 @@ export function AdminLeaveTypesPage() {
                       setDeleteTarget(t);
                     }}
                   >
-                    Xóa
+                    Xoá
                   </Button>
                 </div>
               </div>
@@ -1305,7 +1305,7 @@ export function AdminLeaveTypesPage() {
               ) : null}
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setOpen(false)}>Hủy</Button>
+              <Button onClick={() => setOpen(false)}>Huỷ</Button>
               <Button appearance="primary" disabled={saving} onClick={submit}>
                 {editing ? "Lưu thay đổi" : "Thêm mới"}
               </Button>
@@ -1326,14 +1326,14 @@ export function AdminLeaveTypesPage() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Xóa loại nghỉ?"
+        title="Xoá loại nghỉ?"
         description={
           <>
-            <div>{`Loại nghỉ "${deleteTarget?.leaveTypeName}" sẽ bị xóa vĩnh viễn.`}</div>
+            <div>{`Loại nghỉ "${deleteTarget?.leaveTypeName}" sẽ bị xoá vĩnh viễn.`}</div>
             {deleteError ? <FieldError message={deleteError} /> : null}
           </>
         }
-        confirmLabel="Xóa"
+        confirmLabel="Xoá"
         confirming={deleting}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}

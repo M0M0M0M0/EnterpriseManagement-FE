@@ -417,7 +417,7 @@ export function AdminUsersApiPage() {
               )}
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setUserOpen(false)}>Hủy</Button>
+              <Button onClick={() => setUserOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submitUser} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : editingUser ? "Lưu" : "Tạo tài khoản"}
               </Button>
@@ -477,16 +477,16 @@ export function AdminAuditLogApiPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Audit Log" description="Xem lịch sử thao tác toàn hệ thống, chỉ đọc." />
+      <PageHeader title="Nhật ký hệ thống" description="Xem lịch sử thao tác toàn hệ thống, chỉ đọc." />
       <SectionPanel>
         <div className="filter-grid">
-          <Field label="User">
+          <Field label="Người dùng">
             <Input value={filters.username} onChange={(_, data) => setFilters((value) => ({ ...value, username: data.value }))} />
           </Field>
-          <Field label="Module">
+          <Field label="Phân hệ">
             <Input value={filters.module} onChange={(_, data) => setFilters((value) => ({ ...value, module: data.value }))} />
           </Field>
-          <Field label="Action">
+          <Field label="Hành động">
             <Input value={filters.action} onChange={(_, data) => setFilters((value) => ({ ...value, action: data.value }))} />
           </Field>
           <Field label="Ngày">
@@ -508,10 +508,10 @@ export function AdminAuditLogApiPage() {
               <thead>
                 <tr>
                   <th>Thời gian</th>
-                  <th>User</th>
-                  <th>Module</th>
-                  <th>Action</th>
-                  <th>Target</th>
+                  <th>Người dùng</th>
+                  <th>Phân hệ</th>
+                  <th>Hành động</th>
+                  <th>Đối tượng</th>
                   <th>IP</th>
                 </tr>
               </thead>
@@ -799,7 +799,7 @@ export function AdminSystemApiPage() {
 
   const submitPermission = async () => {
     if (!permissionForm.permissionCode.match(/^[a-z]+(\.[a-z]+)+$/i)) {
-      notify({ ok: false, message: "Permission code cần có dạng module.action." });
+      notify({ ok: false, message: "Mã quyền cần có dạng module.action." });
       return;
     }
     setSending(true);
@@ -845,8 +845,8 @@ export function AdminSystemApiPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="System Administration"
-        description="Quản lý Menu, Role và Permission tập trung tại một nơi."
+        title="Quản trị hệ thống"
+        description="Quản lý menu, vai trò và quyền tập trung tại một nơi."
         action={
           tab === "menus" && !menusUnavailable ? (
             <Button appearance="primary" icon={<AddRegular />} onClick={openCreateMenu}>
@@ -865,13 +865,13 @@ export function AdminSystemApiPage() {
       />
 
       <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(data.value as AdminSystemTab)}>
-        <Tab value="menus">Menus</Tab>
-        <Tab value="roles">Roles</Tab>
-        <Tab value="permissions">Permissions</Tab>
+        <Tab value="menus">Menu</Tab>
+        <Tab value="roles">Vai trò</Tab>
+        <Tab value="permissions">Quyền</Tab>
       </TabList>
 
       {tab === "menus" ? (
-        <SectionPanel title="Menu Configuration">
+        <SectionPanel title="Cấu hình menu">
           {loadingMenus ? (
             <Spinner label="Đang tải menu..." />
           ) : menusUnavailable ? (
@@ -883,11 +883,11 @@ export function AdminSystemApiPage() {
                   <tr>
                     <th>Mã menu</th>
                     <th>Tên menu</th>
-                    <th>Route</th>
-                    <th>Permission</th>
+                    <th>Đường dẫn</th>
+                    <th>Quyền</th>
                     <th>Thứ tự</th>
-                    <th>Visible</th>
-                    <th>Active</th>
+                    <th>Hiển thị</th>
+                    <th>Kích hoạt</th>
                     <th />
                   </tr>
                 </thead>
@@ -900,10 +900,10 @@ export function AdminSystemApiPage() {
                       <td>{joinCodes(menu.permissions) || "--"}</td>
                       <td>{menu.displayOrder}</td>
                       <td>
-                        <Switch checked={menu.isVisible} aria-label={`Visible ${menu.menuName}`} onChange={() => toggleMenuVisible(menu)} />
+                        <Switch checked={menu.isVisible} aria-label={`Hiển thị ${menu.menuName}`} onChange={() => toggleMenuVisible(menu)} />
                       </td>
                       <td>
-                        <Switch checked={menu.isActive} aria-label={`Active ${menu.menuName}`} onChange={() => toggleMenuActive(menu)} />
+                        <Switch checked={menu.isActive} aria-label={`Kích hoạt ${menu.menuName}`} onChange={() => toggleMenuActive(menu)} />
                       </td>
                       <td>
                         <Button size="small" onClick={() => openEditMenu(menu)}>
@@ -922,7 +922,7 @@ export function AdminSystemApiPage() {
       ) : null}
 
       {tab === "roles" ? (
-        <SectionPanel title="Role Configuration">
+        <SectionPanel title="Cấu hình vai trò">
           {loadingRoles ? (
             <Spinner label="Đang tải roles..." />
           ) : rolesUnavailable ? (
@@ -934,7 +934,7 @@ export function AdminSystemApiPage() {
                   <tr>
                     <th>Mã role</th>
                     <th>Tên role</th>
-                    <th>Permission</th>
+                    <th>Quyền</th>
                     <th>Trạng thái</th>
                     <th />
                   </tr>
@@ -972,7 +972,7 @@ export function AdminSystemApiPage() {
       ) : null}
 
       {tab === "permissions" ? (
-        <SectionPanel title="Permission Catalog">
+        <SectionPanel title="Danh mục quyền">
           {loadingPermissions ? (
             <Spinner label="Đang tải permissions..." />
           ) : permissionsUnavailable ? (
@@ -984,7 +984,7 @@ export function AdminSystemApiPage() {
                   <tr>
                     <th>Mã permission</th>
                     <th>Tên</th>
-                    <th>Module</th>
+                    <th>Phân hệ</th>
                     <th>Trạng thái</th>
                     <th />
                   </tr>
@@ -1039,10 +1039,10 @@ export function AdminSystemApiPage() {
                 </Field>
               </div>
               <div className="form-grid">
-                <Field label="Icon">
+                <Field label="Biểu tượng">
                   <Input value={menuForm.icon} onChange={(_, data) => setMenuForm((value) => ({ ...value, icon: data.value }))} />
                 </Field>
-                <Field label="Route" required>
+                <Field label="Đường dẫn" required>
                   <Input value={menuForm.route} onChange={(_, data) => setMenuForm((value) => ({ ...value, route: data.value }))} />
                 </Field>
               </div>
@@ -1054,13 +1054,13 @@ export function AdminSystemApiPage() {
                     onChange={(_, data) => setMenuForm((value) => ({ ...value, displayOrder: Number(data.value) }))}
                   />
                 </Field>
-                <Field label="Permission codes" hint="Permission gate quyền thấy menu này, phân tách bằng dấu phẩy.">
+                <Field label="Mã quyền" hint="Quyền quyết định ai thấy menu này, phân tách bằng dấu phẩy.">
                   <Input value={menuForm.permissions} onChange={(_, data) => setMenuForm((value) => ({ ...value, permissions: data.value }))} />
                 </Field>
               </div>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setMenuOpen(false)}>Hủy</Button>
+              <Button onClick={() => setMenuOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submitMenu} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : "Lưu"}
               </Button>
@@ -1089,7 +1089,7 @@ export function AdminSystemApiPage() {
               <Field label="Mô tả">
                 <Textarea value={roleForm.description} onChange={(_, data) => setRoleForm((value) => ({ ...value, description: data.value }))} />
               </Field>
-              <Field label="Menu &amp; Permission">
+              <Field label="Menu và quyền">
                 <PermissionGroupEditor
                   permissions={permissions}
                   selected={roleForm.permissions}
@@ -1098,7 +1098,7 @@ export function AdminSystemApiPage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setRoleOpen(false)}>Hủy</Button>
+              <Button onClick={() => setRoleOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submitRole} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : "Lưu"}
               </Button>
@@ -1113,7 +1113,7 @@ export function AdminSystemApiPage() {
             <DialogTitle>{editingPermission ? "Sửa permission" : "Tạo permission"}</DialogTitle>
             <DialogContent className="form-stack">
               <div className="form-grid">
-                <Field label="Permission code" required>
+                <Field label="Mã quyền" required>
                   <Input
                     value={permissionForm.permissionCode}
                     disabled={Boolean(editingPermission)}
@@ -1127,7 +1127,7 @@ export function AdminSystemApiPage() {
                   />
                 </Field>
               </div>
-              <Field label="Module" required>
+              <Field label="Phân hệ" required>
                 <Input value={permissionForm.module} onChange={(_, data) => setPermissionForm((value) => ({ ...value, module: data.value }))} />
               </Field>
               <Field label="Mô tả">
@@ -1135,7 +1135,7 @@ export function AdminSystemApiPage() {
               </Field>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setPermissionOpen(false)}>Hủy</Button>
+              <Button onClick={() => setPermissionOpen(false)}>Huỷ</Button>
               <Button appearance="primary" onClick={submitPermission} disabled={sending}>
                 {sending ? <Spinner size="tiny" /> : "Lưu"}
               </Button>

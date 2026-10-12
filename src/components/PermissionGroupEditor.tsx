@@ -16,14 +16,14 @@ import { EmptyState } from "./ui";
 // Permission "page.*" của MenuSeeder dùng tên trang số nhiều/khác dạng số ít so với
 // module của ActionPermissionSeeder (vd "customers" vs "customer") nên cần alias để gộp đúng nhóm.
 const GROUP_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
+  dashboard: "Tổng quan",
   attendance: "Chấm công",
   leave: "Nghỉ phép",
   organization: "Phòng ban & chức vụ",
   employee: "Nhân viên",
   users: "Tài khoản đăng nhập",
-  audit: "Audit Log",
-  system: "System Administration",
+  audit: "Nhật ký hệ thống",
+  system: "Quản trị hệ thống",
 };
 
 const PAGE_KEY_ALIASES: Record<string, string> = {
@@ -38,8 +38,8 @@ function pageGroupKey(permissionCode: string): string {
 
 const PAGE_SCOPE_LABELS: Record<string, string> = {
   employee: "Nhân viên",
-  manager: "Manager",
-  admin: "Admin",
+  manager: "Quản lý",
+  admin: "Quản trị",
 };
 
 // Nhiều permission "page.*" có thể trùng permissionName (vd "Audit Log" của cả

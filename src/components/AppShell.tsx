@@ -45,12 +45,12 @@ interface NavItem {
 
 const navByRole: Record<UserRole, NavItem[]> = {
   employee: [
-    { to: "/employee/dashboard", label: "Dashboard", icon: <HomeRegular />, end: true },
+    { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
     { to: "/employee/attendance", label: "Chấm công", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
   ],
   manager: [
-    { to: "/manager/dashboard", label: "Dashboard tổng quan", icon: <HomeRegular />, end: true },
+    { to: "/manager/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
     { to: "/manager/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
     { to: "/employee/attendance", label: "Chấm công", icon: <ClockRegular /> },
     { to: "/manager/attendance", label: "Quản lý chấm công", icon: <ClockRegular /> },
@@ -62,8 +62,8 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/admin/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
     { to: "/admin/departments", label: "Phòng ban", icon: <BuildingRegular /> },
     { to: "/admin/positions", label: "Chức vụ", icon: <PersonRegular /> },
-    { to: "/admin/audit", label: "Audit Log", icon: <HistoryRegular /> },
-    { to: "/admin/system", label: "System Administration", icon: <SettingsRegular /> },
+    { to: "/admin/audit", label: "Nhật ký hệ thống", icon: <HistoryRegular /> },
+    { to: "/admin/system", label: "Quản trị hệ thống", icon: <SettingsRegular /> },
   ],
 };
 

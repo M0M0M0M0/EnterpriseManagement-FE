@@ -137,7 +137,7 @@ export function SessionBreakdown({
         <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <span>{row.label}:</span>
           <SessionStatusBadge status={row.status} />
-          {row.source === "Note" && row.note ? <small>Ghi chú HR: {row.note}</small> : null}
+          {row.source === "Note" && row.note ? <small>Ghi chú nhân sự: {row.note}</small> : null}
         </div>
       ))}
     </div>
@@ -281,7 +281,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Xác nhận",
-  cancelLabel = "Hủy",
+  cancelLabel = "Huỷ",
   confirming = false,
   onConfirm,
   onCancel,
