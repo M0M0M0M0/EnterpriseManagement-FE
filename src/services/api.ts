@@ -1,5 +1,6 @@
 import { http } from "./http";
 import type {
+  NotificationDto,
   AttendanceAdjustmentDto,
   AttendanceRecordDto,
   AuthSession,
@@ -215,4 +216,11 @@ export const auditApi = {
   },
   // Danh sách Module và Action đang có trong nhật ký, cho ô chọn ở màn hình lọc.
   getFilterOptions: () => http.get<AuditLogFilterOptionsDto>("/audit-logs/filters"),
+};
+
+export const notificationApi = {
+  getList: (take = 30) => http.get<NotificationDto[]>(`/notifications?take=${take}`),
+  getUnreadCount: () => http.get<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: number) => http.put<void>(`/notifications/${id}/read`),
+  markAllRead: () => http.put<void>("/notifications/read-all"),
 };

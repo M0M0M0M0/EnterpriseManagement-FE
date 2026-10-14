@@ -34,6 +34,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/useAuthStore";
 import { useMenuStore } from "../store/useMenuStore";
 import type { UserRole } from "../types/domain";
+import { NotificationBell } from "./NotificationBell";
 import { EmployeeAvatar } from "./ui";
 
 interface NavItem {
@@ -208,6 +209,7 @@ export function AppShell() {
             </div>
           </div>
           <div className="topbar-actions">
+            <NotificationBell />
             <Menu>
               <MenuTrigger disableButtonEnhancement>
                 <Button appearance="subtle" className="user-trigger">

@@ -375,3 +375,15 @@ export interface OrgTreeNodeDto {
   subordinateCount: number;
   subordinates: OrgTreeNodeDto[];
 }
+
+// Một thông báo trong hộp thông báo (khớp NotificationDto của backend).
+export interface NotificationDto {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  route?: string | null;
+  refId?: number | null;
+  isRead: boolean;
+  createdAt: string;
+}

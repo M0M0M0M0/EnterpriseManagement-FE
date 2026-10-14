@@ -1790,7 +1790,7 @@ p {
   }
 
   .topbar-title > div span,
-  .topbar-actions > button:first-child,
+  .topbar-actions > .user-trigger,
   .user-trigger > span:last-child {
     display: none;
   }
@@ -1949,3 +1949,70 @@ p {
   }
 }
 
+
+.notification-bell {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
+.notification-panel {
+  width: min(380px, calc(100vw - 24px));
+  padding: 0;
+}
+
+.notification-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.notification-empty {
+  margin: 0;
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--colorNeutralForeground3);
+}
+
+.notification-item {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--colorNeutralStroke2);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.notification-item:hover {
+  background: var(--colorNeutralBackground1Hover);
+}
+
+.notification-item.unread {
+  background: var(--colorBrandBackground2);
+}
+
+.notification-item span {
+  color: var(--colorNeutralForeground2);
+  font-size: 13px;
+}
+
+.notification-item small {
+  color: var(--colorNeutralForeground3);
+}
