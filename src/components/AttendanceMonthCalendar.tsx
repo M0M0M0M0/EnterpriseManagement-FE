@@ -1,5 +1,5 @@
 import { Button, Popover, PopoverSurface, PopoverTrigger, Spinner } from "@fluentui/react-components";
-import { ChevronDownRegular, ChevronLeftRegular, ChevronRightRegular } from "@fluentui/react-icons";
+import { ChevronDownRegular, ChevronLeftRegular, ChevronRightRegular, EditRegular } from "@fluentui/react-icons";
 import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -136,7 +136,13 @@ function SessionLine({ label, status, source, day, note }: {
 }
 
 // Lịch chấm công theo tháng: tuần bắt đầu thứ Hai, mỗi ngày hai vạch (sáng/chiều), bấm ngày để xem chi tiết.
-export function AttendanceMonthCalendar({ employeeCode }: { employeeCode: string }) {
+export function AttendanceMonthCalendar({
+  employeeCode,
+  onRequestAdjustment,
+}: {
+  employeeCode: string;
+  onRequestAdjustment?: (date: Date) => void;
+}) {
   const [focusedMonth, setFocusedMonth] = useState(() => startOfMonth(new Date()));
   const [selected, setSelected] = useState(() => new Date());
   const [cache, setCache] = useState<Record<string, Record<string, AttendanceCalendarDayDto>>>({});
@@ -191,6 +197,8 @@ export function AttendanceMonthCalendar({ employeeCode }: { employeeCode: string
   };
 
   const selectedIsWeekend = [0, 6].includes(selected.getDay());
+  // Chỉ cho yêu cầu chỉnh sửa với ngày làm việc không ở tương lai (so theo ngày).
+  const canRequest = !!onRequestAdjustment && !selectedIsWeekend && dayKey(selected) <= todayKey;
 
   return (
     <div className="month-attendance">
@@ -284,6 +292,11 @@ export function AttendanceMonthCalendar({ employeeCode }: { employeeCode: string
             {selectedData.checkOutTime ? <div className="day-detail-times">Ra: <strong>{formatTime(selectedData.checkOutTime)}</strong></div> : null}
           </>
         )}
+        {canRequest ? (
+          <Button appearance="outline" size="small" icon={<EditRegular />} onClick={() => onRequestAdjustment?.(selected)}>
+            Yêu cầu chỉnh sửa ngày này
+          </Button>
+        ) : null}
       </div>
     </div>
   );

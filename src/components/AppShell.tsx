@@ -47,13 +47,13 @@ interface NavItem {
 const navByRole: Record<UserRole, NavItem[]> = {
   employee: [
     { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
-    { to: "/employee/attendance", label: "Chấm công", icon: <ClockRegular /> },
+    { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
   ],
   manager: [
     { to: "/manager/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
     { to: "/manager/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
-    { to: "/employee/attendance", label: "Chấm công", icon: <ClockRegular /> },
+    { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
     { to: "/manager/attendance", label: "Quản lý chấm công", icon: <ClockRegular /> },
     { to: "/manager/leave", label: "Duyệt đơn xin nghỉ", icon: <DocumentBulletListRegular /> },
     { to: "/manager/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },

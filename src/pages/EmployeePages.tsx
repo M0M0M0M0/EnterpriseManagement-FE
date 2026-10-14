@@ -169,6 +169,12 @@ export function EmployeeAttendancePage() {
 
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Mở form yêu cầu, đặt sẵn ngày cần chỉnh sửa.
+  const openDialog = (date: Date) => {
+    setForm((v) => ({ ...v, attendanceDate: isoDate(date) }));
+    setDialogOpen(true);
+  };
+
   const send = async () => {
     if (!form.reason.trim()) {
       notify({ ok: false, message: "Vui lòng nhập lý do điều chỉnh." });
@@ -199,10 +205,10 @@ export function EmployeeAttendancePage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Chấm công của tôi"
-        description="Xem lịch sử và gửi yêu cầu khi bản ghi chưa chính xác."
+        title="Điều chỉnh chấm công"
+        description="Xem lịch chấm công của bạn và gửi yêu cầu khi một ngày bị ghi sai."
         action={
-          <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={() => setDialogOpen(true)}>
+          <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={() => openDialog(new Date())}>
             Yêu cầu chỉnh sửa
           </Button>
         }
@@ -211,7 +217,6 @@ export function EmployeeAttendancePage() {
         <Spinner label="Đang tải..." />
       ) : (
         <>
-          {employeeCode ? <PunchHero employeeCode={employeeCode} onPunched={load} /> : null}
           <div className="two-column-grid attendance-columns">
           <SectionPanel
             title="Lịch sử chấm công"
@@ -235,7 +240,7 @@ export function EmployeeAttendancePage() {
             }
           >
             {historyView === "calendar" ? (
-              employeeCode ? <AttendanceMonthCalendar employeeCode={employeeCode} /> : null
+              employeeCode ? <AttendanceMonthCalendar employeeCode={employeeCode} onRequestAdjustment={openDialog} /> : null
             ) : history.length ? (
               <div className="attendance-list">
                 {history.map((record) => (
