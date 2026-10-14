@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   Dialog,
   DialogActions,
@@ -18,16 +17,11 @@ import {
   AddRegular,
   ArrowClockwiseRegular,
   CalendarRegular,
-  CheckmarkCircleRegular,
-  ClockRegular,
 } from "@fluentui/react-icons";
-import { addMonths, eachDayOfInterval, endOfMonth, format as formatDateFns, getDay, startOfMonth, subMonths } from "date-fns";
-import { vi } from "date-fns/locale";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AdjustmentBadge,
   AttendanceBadge,
-  attendanceColors,
   EmptyState,
   FieldError,
   MetricRail,
@@ -38,6 +32,8 @@ import {
   SectionPanel,
   SessionBreakdown,
 } from "../components/ui";
+import { AttendanceMonthCalendar } from "../components/AttendanceMonthCalendar";
+import { PunchHero } from "../components/PunchHero";
 import { useNotify } from "../components/useNotify";
 import {
   attendanceApi,
@@ -64,7 +60,6 @@ import type {
   LeaveTypeDto,
 } from "../types/domain";
 import {
-  attendanceLabels,
   formatDate,
   formatDateTime,
   formatLeaveTime,
@@ -85,11 +80,10 @@ export function EmployeeDashboardPage() {
   const notify = useNotify();
   const [data, setData] = useState<EmployeeDashboardDto | null>(null);
   const [loading, setLoading] = useState(true);
-  const [punching, setPunching] = useState(false);
 
   // Chỉ hiện Spinner toàn trang ở lần tải đầu tiên. Các lần load lại sau (vd. sau khi
   // chấm công) không được set loading=true nữa, để tránh unmount cả trang chỉ để refresh
-  // dữ liệu — nút chấm công tự có Spinner riêng (state `punching`) cho việc đó.
+  // dữ liệu — nút chấm công (PunchHero) tự có Spinner riêng cho việc đó.
   const load = () => {
     if (!employeeCode) return;
     dashboardApi
@@ -110,27 +104,6 @@ export function EmployeeDashboardPage() {
     );
   if (loading || !data) return <Spinner label="Đang tải dashboard..." />;
 
-  const punch = async () => {
-    setPunching(true);
-    try {
-      const record = await attendanceApi.punch();
-      notify({
-        ok: true,
-        message: record.checkOutTime ? "Ra ca thành công." : "Vào ca thành công.",
-      });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setPunching(false);
-    }
-  };
-
-  const today = data.todayAttendance;
-  // Lần punch đầu tiên trong ngày luôn là Check-in; mọi lần sau luôn là Check-out (đè lên giờ
-  // ra cũ nếu bấm nhiều lần) — khớp PunchAsync ở backend (AttendanceService.cs).
-  const nextAction = !today?.checkInTime ? "Check-in" : "Check-out";
-
   return (
     <div className="page-stack">
       <PageHeader
@@ -138,32 +111,7 @@ export function EmployeeDashboardPage() {
         description="Tổng quan chấm công, phép và các yêu cầu đang chờ duyệt."
       />
 
-      <section className="attendance-hero">
-        <div className="attendance-hero-main">
-          <span className="shift-icon">
-            <ClockRegular />
-          </span>
-          <div>
-            <span>Chấm công hôm nay</span>
-            <h2>{today ? today.status : "Chưa chấm công"}</h2>
-            <p>
-              Vào: {formatDateTime(today?.checkInTime)} · Ra: {formatDateTime(today?.checkOutTime)}
-            </p>
-          </div>
-        </div>
-        <div className="attendance-state">
-          {today ? <AttendanceBadge status={today.status} /> : <Badge appearance="outline">Chưa chấm công</Badge>}
-          <Button
-            size="large"
-            appearance="primary"
-            icon={<CheckmarkCircleRegular />}
-            disabled={punching}
-            onClick={punch}
-          >
-            {punching ? <Spinner size="tiny" /> : nextAction}
-          </Button>
-        </div>
-      </section>
+      <PunchHero employeeCode={employeeCode} onPunched={load} />
 
       <MetricRail
         items={[
@@ -188,27 +136,11 @@ export function EmployeeDashboardPage() {
   );
 }
 
-// Tái dùng đúng bảng màu attendanceColors (ui.tsx) để tô chấm màu trên lịch, tránh 2 nguồn màu
-// lệch nhau giữa Badge và ô lịch cho cùng 1 trạng thái.
-function attendanceStatusClass(status: string) {
-  switch (attendanceColors[status]) {
-    case "warning":
-      return "has-late";
-    case "danger":
-      return "has-absent";
-    case "informative":
-      return "has-missing-checkout";
-    default:
-      return "";
-  }
-}
-
 export function EmployeeAttendancePage() {
   const notify = useNotify();
   const [history, setHistory] = useState<AttendanceRecordDto[]>([]);
   const [adjustments, setAdjustments] = useState<AttendanceAdjustmentDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [punching, setPunching] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [form, setForm] = useState({
@@ -217,8 +149,7 @@ export function EmployeeAttendancePage() {
     newCheckInTime: "08:00",
     newCheckOutTime: "17:30",
   });
-  const [historyView, setHistoryView] = useState<"list" | "calendar">("list");
-  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
+  const [historyView, setHistoryView] = useState<"list" | "calendar">("calendar");
   const employeeCode = useEmployeeCode();
 
   // Chỉ hiện Spinner toàn trang ở lần tải đầu tiên (xem EmployeeDashboardPage.load ở trên).
@@ -237,38 +168,6 @@ export function EmployeeAttendancePage() {
   };
 
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const today = history.find((record) => record.attendanceDate === isoDate());
-  // Lần punch đầu tiên trong ngày luôn là Check-in; mọi lần sau luôn là Check-out (đè lên giờ
-  // ra cũ nếu bấm nhiều lần) — khớp PunchAsync ở backend (AttendanceService.cs).
-  const nextAction = !today?.checkInTime ? "Check-in" : "Check-out";
-
-  const recordsByDate = useMemo(() => new Map(history.map((r) => [r.attendanceDate, r])), [history]);
-
-  // Ô trống đầu lưới = số ngày lệch giữa Chủ nhật và ngày 1 của tháng (date-fns getDay: 0 = CN).
-  const calendarCells = useMemo(() => {
-    const monthStart = startOfMonth(calendarMonth);
-    const monthEnd = endOfMonth(calendarMonth);
-    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-    const leadingBlanks = getDay(monthStart);
-    return [...Array(leadingBlanks).fill(null), ...days];
-  }, [calendarMonth]);
-
-  const punch = async () => {
-    setPunching(true);
-    try {
-      const record = await attendanceApi.punch();
-      notify({
-        ok: true,
-        message: record.checkOutTime ? "Ra ca thành công." : "Vào ca thành công.",
-      });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setPunching(false);
-    }
-  };
 
   const send = async () => {
     if (!form.reason.trim()) {
@@ -312,33 +211,8 @@ export function EmployeeAttendancePage() {
         <Spinner label="Đang tải..." />
       ) : (
         <>
-          <section className="attendance-hero">
-            <div className="attendance-hero-main">
-              <span className="shift-icon">
-                <ClockRegular />
-              </span>
-              <div>
-                <span>Chấm công hôm nay</span>
-                <h2>{today ? today.status : "Chưa chấm công"}</h2>
-                <p>
-                  Vào: {formatDateTime(today?.checkInTime)} · Ra: {formatDateTime(today?.checkOutTime)}
-                </p>
-              </div>
-            </div>
-            <div className="attendance-state">
-              {today ? <AttendanceBadge status={today.status} /> : <Badge appearance="outline">Chưa chấm công</Badge>}
-              <Button
-                size="large"
-                appearance="primary"
-                icon={<CheckmarkCircleRegular />}
-                disabled={punching}
-                onClick={punch}
-              >
-                {punching ? <Spinner size="tiny" /> : nextAction}
-              </Button>
-            </div>
-          </section>
-          <div className="two-column-grid">
+          {employeeCode ? <PunchHero employeeCode={employeeCode} onPunched={load} /> : null}
+          <div className="two-column-grid attendance-columns">
           <SectionPanel
             title="Lịch sử chấm công"
             action={
@@ -361,47 +235,7 @@ export function EmployeeAttendancePage() {
             }
           >
             {historyView === "calendar" ? (
-              <div>
-                <div className="attendance-calendar-header">
-                  <Button size="small" onClick={() => setCalendarMonth((m) => subMonths(m, 1))}>
-                    ‹
-                  </Button>
-                  <strong>{formatDateFns(calendarMonth, "MMMM yyyy", { locale: vi })}</strong>
-                  <Button size="small" onClick={() => setCalendarMonth((m) => addMonths(m, 1))}>
-                    ›
-                  </Button>
-                </div>
-                <div className="month-calendar">
-                  {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((dow) => (
-                    <div className="calendar-weekday" key={dow}>
-                      {dow}
-                    </div>
-                  ))}
-                  {calendarCells.map((day, index) => {
-                    if (!day) {
-                      return <div className="calendar-day is-outside" key={`blank-${index}`} />;
-                    }
-                    const key = formatDateFns(day, "yyyy-MM-dd");
-                    const record = recordsByDate.get(key);
-                    return (
-                      <div
-                        className={`calendar-day${record ? ` ${attendanceStatusClass(record.status)}` : " is-outside"}`}
-                        key={key}
-                        title={record ? attendanceLabels[record.status] ?? record.status : undefined}
-                      >
-                        {formatDateFns(day, "d")}
-                        {record ? <i /> : null}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="attendance-calendar-legend">
-                  <span><i className="legend-dot" style={{ background: "var(--success)" }} />Đúng giờ</span>
-                  <span><i className="legend-dot" style={{ background: "#d97706" }} />Đi muộn / Nửa ngày</span>
-                  <span><i className="legend-dot" style={{ background: "var(--danger)" }} />Vắng mặt</span>
-                  <span><i className="legend-dot" style={{ background: "var(--brand)" }} />Nghỉ phép</span>
-                </div>
-              </div>
+              employeeCode ? <AttendanceMonthCalendar employeeCode={employeeCode} /> : null
             ) : history.length ? (
               <div className="attendance-list">
                 {history.map((record) => (

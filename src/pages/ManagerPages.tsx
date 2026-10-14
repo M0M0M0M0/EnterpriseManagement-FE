@@ -28,6 +28,7 @@ import {
   SectionPanel,
   SessionBreakdown,
 } from "../components/ui";
+import { PunchHero } from "../components/PunchHero";
 import { useNotify } from "../components/useNotify";
 import {
   attendanceApi,
@@ -86,7 +87,8 @@ export function ManagerDashboardPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Tổng quan quản lý" description="Tình hình team và các đơn đang chờ duyệt." />
+      <PageHeader title="Tổng quan quản lý" description="Chấm công của bạn, tình hình team và các đơn đang chờ duyệt." />
+      {managerCode ? <PunchHero employeeCode={managerCode} /> : null}
       <MetricRail
         items={[
           { label: "Quy mô team", value: data.teamSize, tone: "brand" },
