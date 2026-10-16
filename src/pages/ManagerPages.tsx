@@ -20,7 +20,7 @@ import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { useCan } from "../hooks/useCan";
 import {
   AdjustmentBadge,
-  AttendanceBadge,
+  AttendanceStatusCell,
   ConfirmDialog,
   EmptyState,
   FieldError,
@@ -28,7 +28,6 @@ import {
   PageHeader,
   RequestBadge,
   SectionPanel,
-  SessionBreakdown,
 } from "../components/ui";
 import { FilterSelect, ReasonDialog, RetryError } from "../components/ReviewParts";
 import { PunchHero } from "../components/PunchHero";
@@ -571,8 +570,7 @@ export function ManagerAttendancePage() {
                       <td>{formatDateTime(r.checkOutTime)}</td>
                       <td>{r.workingHours ?? "--"}</td>
                       <td>
-                        <AttendanceBadge status={r.status} />
-                        <SessionBreakdown record={r} />
+                        <AttendanceStatusCell record={r} />
                       </td>
                     </tr>
                   ))}

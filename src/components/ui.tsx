@@ -144,6 +144,25 @@ export function SessionBreakdown({
   );
 }
 
+// Ô trạng thái chấm công: nếu sáng và chiều khác nhau thì chỉ hiện từng buổi (đã đủ để biết đi muộn/vắng buổi nào),
+// ngược lại hiện một huy hiệu tổng. Tránh hiện huy hiệu tổng lặp lại ngay trên chi tiết từng buổi.
+export function AttendanceStatusCell({
+  record,
+}: {
+  record: {
+    status: string;
+    morningStatus?: string;
+    afternoonStatus?: string;
+    morningSource?: string;
+    afternoonSource?: string;
+    morningNote?: string;
+    afternoonNote?: string;
+  };
+}) {
+  const split = Boolean(record.morningStatus && record.afternoonStatus && record.morningStatus !== record.afternoonStatus);
+  return split ? <SessionBreakdown record={record} /> : <AttendanceBadge status={record.status} />;
+}
+
 export function RequestBadge({ status }: { status: string }) {
   return (
     <Badge appearance="tint" color={requestColors[status] ?? "subtle"} shape="rounded">

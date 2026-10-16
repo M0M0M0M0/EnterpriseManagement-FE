@@ -31,7 +31,7 @@ import { useCan } from "../hooks/useCan";
 import {
   AdjustmentBadge,
   ConfirmDialog,
-  AttendanceBadge,
+  AttendanceStatusCell,
   EmptyState,
   FieldError,
   MetricRail,
@@ -40,7 +40,6 @@ import {
   ReturnSessionBadge,
   ReturnStatusBadge,
   SectionPanel,
-  SessionBreakdown,
 } from "../components/ui";
 import { AttendanceMonthCalendar } from "../components/AttendanceMonthCalendar";
 import { PunchHero } from "../components/PunchHero";
@@ -447,8 +446,7 @@ export function EmployeeAttendancePage() {
                       </div>
                     </div>
                     <div className="attendance-state">
-                      <AttendanceBadge status={record.status} />
-                      <SessionBreakdown record={record} />
+                      <AttendanceStatusCell record={record} />
                     </div>
                   </article>
                 ))}
