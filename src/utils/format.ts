@@ -48,7 +48,7 @@ export const attendanceLabels: Record<string, string> = {
   HalfDayAbsent: "Vắng nửa buổi sáng",
   Absent: "Vắng mặt",
   OnLeave: "Nghỉ phép",
-  None: "Chưa có dữ liệu",
+  None: "Chưa chấm công",
 };
 
 // Nhãn trạng thái từng buổi (SessionStatus) do backend tính
