@@ -45,6 +45,7 @@ export function LoginPage() {
         username: result.username,
         employeeCode: result.employeeCode,
         roles: result.roles,
+        permissions: result.permissions,
       });
       navigate(homePathForRole(useAuthStore.getState().role));
     } catch (err) {

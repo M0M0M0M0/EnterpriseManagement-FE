@@ -6,11 +6,16 @@ import {
   AccessDeniedPage,
   AccountSettingsPage,
   NotFoundPage,
+  PrivacyPolicyPage,
   ProfilePage,
 } from "./pages/CommonPages";
 import { LoginPage } from "./pages/LoginPage";
 import { useAuthStore } from "./store/useAuthStore";
 import { useMenuStore } from "./store/useMenuStore";
+
+const NotificationsPage = lazy(() =>
+  import("./pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })),
+);
 
 const EmployeeDashboardPage = lazy(() =>
   import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeDashboardPage })),
@@ -163,6 +168,8 @@ function App() {
         <Route element={<RequireAuth><AppShell /></RequireAuth>}>
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/account-settings" element={<AccountSettingsPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
         </Route>
 
         {businessRoutes.map(({ path, element }) => (

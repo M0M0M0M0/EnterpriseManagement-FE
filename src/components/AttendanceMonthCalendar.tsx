@@ -4,6 +4,7 @@ import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMont
 import { vi } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
+import { useCan } from "../hooks/useCan";
 import { attendanceViewApi } from "../services/hrApi";
 import { errorMessage } from "../services/http";
 import type { AttendanceCalendarDayDto, SessionStatus } from "../types/attendanceHr";
@@ -150,6 +151,7 @@ export function AttendanceMonthCalendar({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const can = useCan();
 
   const loadMonth = useCallback(
     (month: Date, force = false) => {
@@ -221,7 +223,17 @@ export function AttendanceMonthCalendar({
 
   const selectedIsWeekend = [0, 6].includes(selected.getDay());
   // Chỉ cho yêu cầu chỉnh sửa với ngày làm việc không ở tương lai (so theo ngày).
-  const canRequest = !!onRequestAdjustment && !selectedIsWeekend && dayKey(selected) <= todayKey;
+  // Nút chỉ hiện với tài khoản có quyền attendance.adjustment.self (như PermissionGate bên mobile).
+  const canRequest =
+    !!onRequestAdjustment && !selectedIsWeekend && dayKey(selected) <= todayKey && can("attendance.adjustment.self");
+
+  // Nhảy tới một ngày bất kỳ (tương đương nút chọn ngày ở đầu màn Lịch bên mobile).
+  const jumpToDate = (value: string) => {
+    if (!value) return;
+    const [y, m, d] = value.split("-").map(Number);
+    setSelected(new Date(y, m - 1, d));
+    setFocusedMonth(new Date(y, m - 1, 1));
+  };
 
   return (
     <div className="month-attendance">
@@ -240,6 +252,16 @@ export function AttendanceMonthCalendar({
           </PopoverSurface>
         </Popover>
         <Button appearance="subtle" icon={<ChevronRightRegular />} onClick={() => changeMonth(1)} aria-label="Tháng sau" />
+        <input
+          type="date"
+          className="month-jump"
+          aria-label="Chọn ngày"
+          title="Chọn ngày"
+          min="2000-01-01"
+          max="2100-12-31"
+          value={dayKey(selected)}
+          onChange={(event) => jumpToDate(event.target.value)}
+        />
       </div>
 
       <div className="month-attendance-legend">
@@ -317,7 +339,7 @@ export function AttendanceMonthCalendar({
         )}
         {canRequest ? (
           <Button appearance="outline" size="small" icon={<EditRegular />} onClick={() => onRequestAdjustment?.(selected)}>
-            Yêu cầu chỉnh sửa ngày này
+            Yêu cầu chỉnh sửa
           </Button>
         ) : null}
       </div>

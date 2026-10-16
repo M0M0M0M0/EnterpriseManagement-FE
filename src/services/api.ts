@@ -1,6 +1,7 @@
 import { http } from "./http";
 import type {
   NotificationDto,
+  OfficeLocationDto,
   AttendanceAdjustmentDto,
   AttendanceRecordDto,
   AuthSession,
@@ -99,6 +100,16 @@ export const positionApi = {
 
 export const attendanceApi = {
   punch: () => http.post<AttendanceRecordDto>("/attendance/punch"),
+  // Chấm công kèm vị trí (bắt buộc) và ảnh (bắt buộc khi vào ca), khớp app mobile.
+  punchWithEvidence: (latitude: number, longitude: number, photo?: Blob) => {
+    const form = new FormData();
+    form.append("latitude", String(latitude));
+    form.append("longitude", String(longitude));
+    form.append("isMockLocation", "false");
+    if (photo) form.append("photo", photo, "attendance.jpg");
+    return http.postForm<AttendanceRecordDto>("/attendance/punch", form);
+  },
+  getOfficeLocation: () => http.get<OfficeLocationDto>("/attendance/office-location"),
   getHistory: (employeeCode: string) =>
     http.get<AttendanceRecordDto[]>(`/attendance/${employeeCode}/history`),
   // Cấp dưới (đệ quy) của một quản lý, không gồm chính họ.
@@ -217,6 +228,13 @@ export const auditApi = {
 
 export const notificationApi = {
   getList: (take = 30) => http.get<NotificationDto[]>(`/notifications?take=${take}`),
+  // Hộp thông báo: lọc chưa đọc, tải trang cũ hơn bằng beforeId.
+  getPage: (options: { unreadOnly?: boolean; take?: number; beforeId?: number } = {}) => {
+    const params = new URLSearchParams({ take: String(options.take ?? 30) });
+    if (options.unreadOnly) params.set("unreadOnly", "true");
+    if (options.beforeId) params.set("beforeId", String(options.beforeId));
+    return http.get<NotificationDto[]>(`/notifications?${params.toString()}`);
+  },
   getUnreadCount: () => http.get<{ count: number }>("/notifications/unread-count"),
   markRead: (id: number) => http.put<void>(`/notifications/${id}/read`),
   markAllRead: () => http.put<void>("/notifications/read-all"),

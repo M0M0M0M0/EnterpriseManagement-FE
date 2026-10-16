@@ -2,6 +2,8 @@ import { Badge, Button, Popover, PopoverSurface, PopoverTrigger, Spinner } from 
 import { AlertRegular, CheckmarkRegular } from "@fluentui/react-icons";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { formatRelativeTime } from "../utils/format";
+import { notificationStyle, useOpenNotificationRoute } from "./notificationMeta";
 import { errorMessage } from "../services/http";
 import { notificationApi } from "../services/api";
 import { startLiveUpdates, subscribeLive, useLiveState } from "../store/useLiveUpdates";
@@ -12,21 +14,10 @@ import { useNotify } from "./useNotify";
 // Nhắc chấm công thì không toast cho đỡ ồn.
 const SILENT_TYPES = new Set(["CheckInReminder", "CheckOutReminder"]);
 
-function timeAgo(iso: string) {
-  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "Vừa xong";
-  if (minutes < 60) return `${minutes} phút trước`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} giờ trước`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} ngày trước`;
-  return new Date(iso).toLocaleDateString("vi-VN");
-}
-
 // Chuông thông báo trên header: hiện số chưa đọc, bấm để xem danh sách và đi tới trang liên quan.
 export function NotificationBell() {
   const navigate = useNavigate();
+  const openRoute = useOpenNotificationRoute();
   const [open, setOpen] = useState(false);
   const unread = useLiveState((state) => state.unread);
   const setUnread = useLiveState((state) => state.setUnread);
@@ -85,7 +76,7 @@ export function NotificationBell() {
       setUnread((count) => Math.max(0, count - 1));
       notificationApi.markRead(item.id).catch(() => refreshCount());
     }
-    if (item.route) navigate(item.route);
+    openRoute(item);
   };
 
   const markAll = async () => {
@@ -138,11 +129,28 @@ export function NotificationBell() {
               className={`notification-item${item.isRead ? "" : " unread"}`}
               onClick={() => openItem(item)}
             >
-              <strong>{item.title}</strong>
+              <strong>
+                <span className="nf-mini-icon" style={{ color: notificationStyle(item.type).color }}>
+                  {notificationStyle(item.type).icon}
+                </span>
+                {item.title}
+              </strong>
               <span>{item.body}</span>
-              <small>{timeAgo(item.createdAt)}</small>
+              <small>{formatRelativeTime(item.createdAt)}</small>
             </button>
           ))}
+        </div>
+        <div className="notification-foot">
+          <Button
+            appearance="transparent"
+            size="small"
+            onClick={() => {
+              setOpen(false);
+              navigate("/notifications");
+            }}
+          >
+            Xem tất cả
+          </Button>
         </div>
       </PopoverSurface>
     </Popover>

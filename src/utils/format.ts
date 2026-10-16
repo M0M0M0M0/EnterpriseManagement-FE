@@ -68,7 +68,7 @@ export const sessionNames: Record<string, string> = {
 // Yêu cầu điều chỉnh công (2 bước: Manager rồi HR)
 export const adjustmentStatusLabels: Record<string, string> = {
   Pending: "Chờ quản lý duyệt",
-  PendingHr: "Chờ nhân sự xử lý",
+  PendingHr: "Chờ HR xử lý",
   Approved: "Đã áp dụng",
   Rejected: "Từ chối",
 };
@@ -82,7 +82,7 @@ export const returnStatusLabels: Record<string, string> = {
 };
 
 export const returnSessionStateLabels: Record<string, string> = {
-  Pending: "Chờ",
+  Pending: "Chờ quản lý duyệt",
   AwaitingHr: "Chờ xác nhận",
   Active: "Đã có hiệu lực",
   Rejected: "Từ chối",
@@ -152,4 +152,41 @@ export function shortLeaveSlotLabel(start: string) {
   const endMinutes = h * 60 + m + 30;
   const end = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
   return `${start} - ${end}`;
+}
+
+// Nhãn tình trạng làm việc (khớp employmentStatusLabel của mobile).
+export function employmentStatusLabel(status: string) {
+  switch (status) {
+    case "Active":
+      return "Đang làm việc";
+    case "Probation":
+      return "Thử việc";
+    case "Resigned":
+    case "Terminated":
+      return "Đã nghỉ việc";
+    default:
+      return status;
+  }
+}
+
+// Nhãn giới tính (khớp genderLabel của mobile).
+export function genderLabel(gender?: string) {
+  if (!gender) return "--";
+  if (gender === "Male") return "Nam";
+  if (gender === "Female") return "Nữ";
+  return "Khác";
+}
+
+// Thời gian tương đối cho thông báo (khớp viRelativeTime bên mobile).
+export function formatRelativeTime(iso: string, now = new Date()) {
+  const time = new Date(iso);
+  const diffMinutes = Math.floor((now.getTime() - time.getTime()) / 60_000);
+  if (diffMinutes < 1) return "Vừa xong";
+  if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(time)) / 86_400_000);
+  if (days === 0) return `${Math.floor(diffMinutes / 60)} giờ trước`;
+  if (days === 1) return "Hôm qua";
+  if (days < 7) return `${days} ngày trước`;
+  return format(time, "dd/MM/yyyy");
 }

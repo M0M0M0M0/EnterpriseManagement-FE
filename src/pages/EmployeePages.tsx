@@ -11,17 +11,26 @@ import {
   Input,
   Option,
   Spinner,
+  Tab,
+  TabList,
   Textarea,
 } from "@fluentui/react-components";
 import {
   AddRegular,
   ArrowClockwiseRegular,
+  ArrowDownloadRegular,
   CalendarRegular,
+  ChevronLeftRegular,
+  ChevronRightRegular,
 } from "@fluentui/react-icons";
+import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
+import { vi } from "date-fns/locale";
 import { useEffect, useState } from "react";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
+import { useCan } from "../hooks/useCan";
 import {
   AdjustmentBadge,
+  ConfirmDialog,
   AttendanceBadge,
   EmptyState,
   FieldError,
@@ -61,9 +70,11 @@ import type {
   LeaveTypeDto,
 } from "../types/domain";
 import {
+  attendanceLabels,
   formatDate,
   formatDateTime,
   formatLeaveTime,
+  formatNumber,
   formatTime,
   isoDate,
   leaveSessionLabels,
@@ -81,6 +92,96 @@ function isWeekendDate(value: string) {
 
 function useEmployeeCode() {
   return useAuthStore((state) => state.session?.employeeCode);
+}
+
+// Lời chào theo giờ trong ngày (như Trang chủ mobile).
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour < 11) return "Chào buổi sáng";
+  if (hour < 13) return "Chào buổi trưa";
+  if (hour < 18) return "Chào buổi chiều";
+  return "Chào buổi tối";
+}
+
+// Tên người Việt: lấy từ cuối (tên gọi) cho lời chào ngắn gọn.
+function shortName(full: string) {
+  const parts = full.trim().split(/\s+/);
+  return parts[parts.length - 1] ?? "";
+}
+
+// Thẻ "Tình trạng nghỉ phép": số dư từng loại (3 dòng đầu), bấm "Xem chi tiết" để xem đủ kèm phân loại có lương/không lương.
+function LeaveStatusCard({ employeeCode }: { employeeCode: string }) {
+  const [balances, setBalances] = useState<LeaveBalanceDto[]>([]);
+  const [paidByCode, setPaidByCode] = useState<Record<string, boolean>>({});
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const load = () =>
+    Promise.all([
+      leaveBalanceApi.getByEmployee(employeeCode, new Date().getFullYear()),
+      leaveTypeApi.getAll().catch(() => [] as LeaveTypeDto[]),
+    ])
+      .then(([b, t]) => {
+        setBalances(b);
+        setPaidByCode(Object.fromEntries(t.map((type) => [type.leaveTypeCode, type.isPaid])));
+      })
+      .catch(() => undefined);
+
+  useEffect(() => {
+    void load();
+  }, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useAutoRefresh(load, { types: ["LeaveApproved", "LeaveRejected", "ReturnApproved", "LeaveSubmitted"] });
+
+  if (!balances.length) return null;
+  const value = (b: LeaveBalanceDto) => formatLeaveTime(b.remainingTime, b.unit);
+  const category = (b: LeaveBalanceDto) => ((paidByCode[b.leaveTypeCode] ?? true) ? "Nghỉ có lương" : "Nghỉ không lương");
+
+  return (
+    <SectionPanel
+      title="Tình trạng nghỉ phép"
+      action={
+        <Button size="small" appearance="subtle" onClick={() => setDetailOpen(true)}>
+          Xem chi tiết
+        </Button>
+      }
+    >
+      <div className="compact-list">
+        {balances.slice(0, 3).map((b) => (
+          <div className="compact-row" key={`${b.leaveTypeCode}-${b.month ?? "y"}`}>
+            <div>
+              <strong>{b.leaveTypeName}</strong>
+            </div>
+            <span>{value(b)}</span>
+          </div>
+        ))}
+      </div>
+      <Dialog open={detailOpen} onOpenChange={(_, data) => setDetailOpen(data.open)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Chi tiết tình trạng nghỉ phép</DialogTitle>
+            <DialogContent>
+              <div className="compact-list">
+                {balances.map((b) => (
+                  <div className="compact-row" key={`${b.leaveTypeCode}-${b.month ?? "y"}`}>
+                    <div>
+                      <strong>{b.leaveTypeName}</strong>
+                      <span>{category(b)}</span>
+                    </div>
+                    <strong>{value(b)}</strong>
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="primary" onClick={() => setDetailOpen(false)}>
+                Đóng
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </SectionPanel>
+  );
 }
 
 export function EmployeeDashboardPage() {
@@ -121,8 +222,8 @@ export function EmployeeDashboardPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title={`Chào ${data.employeeName}`}
-        description="Tổng quan chấm công, phép và các yêu cầu đang chờ duyệt."
+        title={`${greeting()}, ${shortName(data.employeeName)}`}
+        description="Chúc bạn một ngày hiệu quả. Tổng quan chấm công, phép và các yêu cầu đang chờ duyệt."
       />
 
       <PunchHero employeeCode={employeeCode} onPunched={load} />
@@ -146,6 +247,8 @@ export function EmployeeDashboardPage() {
           },
         ]}
       />
+
+      <LeaveStatusCard employeeCode={employeeCode} />
     </div>
   );
 }
@@ -165,13 +268,16 @@ export function EmployeeAttendancePage() {
   });
   const [historyView, setHistoryView] = useState<"list" | "calendar">("calendar");
   const employeeCode = useEmployeeCode();
+  const can = useCan();
+  // Yêu cầu điều chỉnh chỉ tải/gửi được khi có quyền (endpoint cần attendance.adjustment.self).
+  const canAdjust = can("attendance.adjustment.self");
 
   // Chỉ hiện Spinner toàn trang ở lần tải đầu tiên (xem EmployeeDashboardPage.load ở trên).
   const load = () => {
     if (!employeeCode) return;
     Promise.all([
       attendanceApi.getHistory(employeeCode),
-      attendanceApi.getMyAdjustments(),
+      canAdjust ? attendanceApi.getMyAdjustments() : Promise.resolve([] as AttendanceAdjustmentDto[]),
     ])
       .then(([h, a]) => {
         setHistory(h);
@@ -187,7 +293,10 @@ export function EmployeeAttendancePage() {
   useAutoRefresh(
     () =>
       employeeCode
-        ? Promise.all([attendanceApi.getHistory(employeeCode), attendanceApi.getMyAdjustments()])
+        ? Promise.all([
+            attendanceApi.getHistory(employeeCode),
+            canAdjust ? attendanceApi.getMyAdjustments() : Promise.resolve([] as AttendanceAdjustmentDto[]),
+          ])
             .then(([h, a]) => {
               setHistory(h);
               setAdjustments(a);
@@ -203,16 +312,59 @@ export function EmployeeAttendancePage() {
     setDialogOpen(true);
   };
 
+  // Xuất lịch sử chấm công ra CSV (có BOM để Excel đọc đúng tiếng Việt), mới nhất lên đầu.
+  const exportCsv = () => {
+    if (!history.length) {
+      notify({ ok: false, message: "Không có dữ liệu để xuất." });
+      return;
+    }
+    const cell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const stamp = (value?: string) => (value ? format(new Date(value), "dd/MM/yyyy HH:mm") : "--");
+    const rows = [...history].sort((a, b) => b.attendanceDate.localeCompare(a.attendanceDate));
+    const lines = ["Ngày,Giờ vào,Giờ ra,Số giờ làm,Trạng thái"];
+    for (const r of rows) {
+      lines.push(
+        [
+          formatDate(r.attendanceDate),
+          stamp(r.checkInTime),
+          stamp(r.checkOutTime),
+          r.workingHours != null ? r.workingHours.toFixed(2) : "",
+          attendanceLabels[r.status] ?? r.status,
+        ]
+          .map(cell)
+          .join(","),
+      );
+    }
+    const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `cham_cong_${format(new Date(), "yyyyMMdd_HHmmss")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const todayIso = isoDate();
+  const earliestAdjustDate = isoDate(new Date(Date.now() - 366 * 24 * 3600 * 1000));
+
   const send = async () => {
     if (!form.reason.trim()) {
       notify({ ok: false, message: "Vui lòng nhập lý do điều chỉnh." });
+      return;
+    }
+    if (!form.newCheckInTime && !form.newCheckOutTime) {
+      notify({ ok: false, message: "Hãy đề xuất ít nhất một giờ vào hoặc giờ ra." });
+      return;
+    }
+    if (!form.attendanceDate || form.attendanceDate > todayIso || form.attendanceDate < earliestAdjustDate) {
+      notify({ ok: false, message: "Ngày cần chỉnh sửa phải trong vòng 366 ngày gần đây và không ở tương lai." });
       return;
     }
     setSending(true);
     try {
       await attendanceApi.submitAdjustment({
         attendanceDate: form.attendanceDate,
-        reason: form.reason,
+        reason: form.reason.trim(),
         newCheckInTime: form.newCheckInTime
           ? `${form.attendanceDate}T${form.newCheckInTime}:00`
           : undefined,
@@ -236,9 +388,16 @@ export function EmployeeAttendancePage() {
         title="Điều chỉnh chấm công"
         description="Xem lịch chấm công của bạn và gửi yêu cầu khi một ngày bị ghi sai."
         action={
-          <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={() => openDialog(new Date())}>
-            Yêu cầu chỉnh sửa
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button icon={<ArrowDownloadRegular />} onClick={exportCsv} title="Xuất CSV lịch sử chấm công">
+              Xuất CSV
+            </Button>
+            {canAdjust ? (
+              <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={() => openDialog(new Date())}>
+                Yêu cầu chỉnh sửa
+              </Button>
+            ) : null}
+          </div>
         }
       />
       {loading ? (
@@ -268,7 +427,7 @@ export function EmployeeAttendancePage() {
             }
           >
             {historyView === "calendar" ? (
-              employeeCode ? <AttendanceMonthCalendar employeeCode={employeeCode} onRequestAdjustment={openDialog} /> : null
+              employeeCode ? <AttendanceMonthCalendar employeeCode={employeeCode} onRequestAdjustment={canAdjust ? openDialog : undefined} /> : null
             ) : history.length ? (
               <div className="attendance-list">
                 {history.map((record) => (
@@ -305,18 +464,39 @@ export function EmployeeAttendancePage() {
                   <div className="compact-row" key={item.id}>
                     <div>
                       <strong>{formatDate(item.attendanceDate)}</strong>
-                      <span>{item.reason}</span>
+                      {item.newCheckInTime ? (
+                        <span>
+                          Giờ vào: {formatTime(item.oldCheckInTime)} → {formatTime(item.newCheckInTime)}
+                        </span>
+                      ) : null}
+                      {item.newCheckOutTime ? (
+                        <span>
+                          Giờ ra: {formatTime(item.oldCheckOutTime)} → {formatTime(item.newCheckOutTime)}
+                        </span>
+                      ) : null}
+                      <span>Lý do: {item.reason}</span>
                       {item.status === "Rejected" && item.rejectionReason ? (
                         <small>Lý do từ chối: {item.rejectionReason}</small>
                       ) : null}
-                      {item.processedByName ? <small>Người xử lý: {item.processedByName}</small> : null}
+                      {item.approverName ? (
+                        <small>
+                          Quản lý xác nhận: {item.approverName}
+                          {item.approvedAt ? ` · ${formatDateTime(item.approvedAt)}` : ""}
+                        </small>
+                      ) : null}
+                      {item.processedByName ? (
+                        <small>
+                          HR xử lý: {item.processedByName}
+                          {item.processedAt ? ` · ${formatDateTime(item.processedAt)}` : ""}
+                        </small>
+                      ) : null}
                     </div>
                     <AdjustmentBadge status={item.status} />
                   </div>
                 ))}
               </div>
             ) : (
-              <EmptyState title="Chưa có yêu cầu" description="Yêu cầu chỉnh sửa chấm công sẽ hiển thị tại đây." />
+              <EmptyState title="Chưa có yêu cầu" description="Chưa có yêu cầu chỉnh sửa chấm công." />
             )}
           </SectionPanel>
           </div>
@@ -331,6 +511,8 @@ export function EmployeeAttendancePage() {
               <Field label="Ngày cần chỉnh sửa" required>
                 <Input
                   type="date"
+                  min={earliestAdjustDate}
+                  max={todayIso}
                   value={form.attendanceDate}
                   onChange={(_, data) => setForm((v) => ({ ...v, attendanceDate: data.value }))}
                 />
@@ -351,6 +533,9 @@ export function EmployeeAttendancePage() {
                   />
                 </Field>
               </div>
+              <p className="field-hint">
+                Bỏ trống giờ vào nếu quên chấm công ra, bỏ trống giờ ra nếu quên chấm công vào.
+              </p>
               <Field label="Lý do" required>
                 <Textarea
                   resize="vertical"
@@ -372,8 +557,113 @@ export function EmployeeAttendancePage() {
   );
 }
 
+// Nhãn khoảng ngày của đơn: một ngày thì dd/MM/yyyy, nhiều ngày thì "từ - đến".
+function leaveDateLabel(item: LeaveRequestDto) {
+  const start = formatDate(item.startDate);
+  const end = formatDate(item.endDate);
+  return start === end ? start : `${start} - ${end}`;
+}
+
+// Nhãn buổi/khung giờ: đơn chọn buổi thì tên buổi, nghỉ ngắn thì giờ bắt đầu - kết thúc.
+function leaveTimeLabel(item: LeaveRequestDto) {
+  if (item.session) return leaveSessionLabels[item.session];
+  return `${formatTime(item.startDate)} - ${formatTime(item.endDate)}`;
+}
+
+// Ngày làm việc kế tiếp (nếu rơi vào thứ Bảy/Chủ nhật thì nhảy sang thứ Hai).
+function nextWorkday(date: Date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+const leaveStatusFilters: { value: string | null; label: string }[] = [
+  { value: null, label: "Tất cả" },
+  { value: "Pending", label: "Chờ duyệt" },
+  { value: "Approved", label: "Đã duyệt" },
+  { value: "Rejected", label: "Từ chối" },
+  { value: "Cancelled", label: "Đã hủy" },
+];
+
+type LeaveTab = "requests" | "balances" | "calendar";
+
+// Lịch tháng các ngày nghỉ: chỉ đánh dấu đơn Chờ duyệt / Đã duyệt (đơn bị từ chối, đã hủy không chiếm ngày).
+function LeaveCalendar({ requests, onOpen }: { requests: LeaveRequestDto[]; onOpen: (item: LeaveRequestDto) => void }) {
+  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  const [selected, setSelected] = useState(() => new Date());
+
+  const eventsFor = (day: Date) => {
+    const key = isoDate(day);
+    return requests.filter(
+      (r) =>
+        (r.status === "Pending" || r.status === "Approved") &&
+        key >= r.startDate.slice(0, 10) &&
+        key <= r.endDate.slice(0, 10),
+    );
+  };
+
+  const days = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
+  const leading = (startOfMonth(month).getDay() + 6) % 7;
+  const cells: (Date | null)[] = [...Array<null>(leading).fill(null), ...days];
+  const todayKey = isoDate();
+  const selectedEvents = eventsFor(selected);
+
+  return (
+    <div className="leave-calendar">
+      <div className="leave-calendar-head">
+        <Button appearance="subtle" icon={<ChevronLeftRegular />} aria-label="Tháng trước" onClick={() => setMonth(subMonths(month, 1))} />
+        <strong>{format(month, "'Tháng' M, yyyy", { locale: vi })}</strong>
+        <Button appearance="subtle" icon={<ChevronRightRegular />} aria-label="Tháng sau" onClick={() => setMonth(addMonths(month, 1))} />
+      </div>
+      <div className="leave-calendar-grid">
+        {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((w) => (
+          <div key={w} className="weekday">
+            {w}
+          </div>
+        ))}
+        {cells.map((day, index) =>
+          day ? (
+            <button
+              type="button"
+              key={isoDate(day)}
+              className={`leave-day${isoDate(day) === todayKey ? " is-today" : ""}${isoDate(day) === isoDate(selected) ? " is-selected" : ""}`}
+              onClick={() => setSelected(day)}
+            >
+              <span>{day.getDate()}</span>
+              {eventsFor(day).length ? <i /> : null}
+            </button>
+          ) : (
+            <div key={`blank-${index}`} />
+          ),
+        )}
+      </div>
+      <h3 className="leave-calendar-title">Ngày {format(selected, "dd/MM/yyyy")}</h3>
+      {selectedEvents.length ? (
+        <div className="compact-list">
+          {selectedEvents.map((r) => (
+            <button type="button" className="compact-row leave-row-button" key={r.id} onClick={() => onOpen(r)}>
+              <div>
+                <strong>{r.leaveTypeName}</strong>
+                <span>
+                  {leaveDateLabel(r)} · {leaveTimeLabel(r)}
+                </span>
+              </div>
+              <RequestBadge status={r.status} />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="field-hint">Không có đơn nghỉ trong ngày này.</p>
+      )}
+    </div>
+  );
+}
+
 export function EmployeeLeavePage() {
   const notify = useNotify();
+  const can = useCan();
+  // Tạo/huỷ đơn và đi làm lại chỉ hiện với tài khoản có quyền leave.request.self (như PermissionGate bên mobile).
+  const canSelf = can("leave.request.self");
   const [requests, setRequests] = useState<LeaveRequestDto[]>([]);
   const [balances, setBalances] = useState<LeaveBalanceDto[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeDto[]>([]);
@@ -382,25 +672,36 @@ export function EmployeeLeavePage() {
   const [sending, setSending] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [returns, setReturns] = useState<LeaveReturnRequestDto[]>([]);
+  const [tab, setTab] = useState<LeaveTab>("requests");
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [detail, setDetail] = useState<LeaveRequestDto | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequestDto | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const employeeCode = useEmployeeCode();
+
+  // Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc để quản lý kịp duyệt và sắp xếp
+  // công việc: xin trước/đúng 17h thì sớm nhất là ngày mai, xin sau 17h thì sớm nhất là
+  // ngày kia (rơi vào cuối tuần thì sang thứ Hai). Khớp với ResolveRequestedTime ở backend
+  // (LeaveRequestService.cs) và màn tạo đơn bên mobile.
+  const minAnnualDate = (() => {
+    const now = new Date();
+    const daysAhead = now.getHours() * 60 + now.getMinutes() <= 17 * 60 ? 1 : 2;
+    return isoDate(nextWorkday(new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead)));
+  })();
+  // Đơn thường cho chọn lùi tối đa 365 ngày (như bộ chọn ngày bên mobile).
+  const minLeaveDate = isoDate(new Date(Date.now() - 365 * 24 * 3600 * 1000));
+
   const [form, setForm] = useState({
     leaveTypeCode: "",
-    startDate: isoDate(),
-    endDate: isoDate(),
+    startDate: isoDate(nextWorkday(new Date())),
+    endDate: isoDate(nextWorkday(new Date())),
     session: "FullDay" as LeaveSession,
     shortSlot: shortLeaveSlots[0],
     reason: "",
   });
 
-  // Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc để quản lý kịp duyệt và sắp xếp
-  // công việc: xin trước/đúng 17h thì sớm nhất là ngày mai, xin sau 17h thì sớm nhất là
-  // ngày kia. Khớp với ResolveRequestedTime ở backend (LeaveRequestService.cs).
-  const minAnnualDate = (() => {
-    const now = new Date();
-    const daysAhead = now.getHours() < 17 ? 1 : 2;
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead);
-    return isoDate(d);
-  })();
+  const activeTypes = leaveTypes.filter((t) => t.isActive);
 
   const load = () => {
     if (!employeeCode) return;
@@ -413,13 +714,15 @@ export function EmployeeLeavePage() {
       leaveReturnApi.getMine().catch(() => [] as LeaveReturnRequestDto[]),
     ])
       .then(([r, b, t, rt]) => {
-        setRequests(r);
+        // Đơn tạo sau (id lớn hơn) lên đầu.
+        setRequests([...r].sort((a, c) => c.id - a.id));
         setBalances(b);
         setLeaveTypes(t);
         setReturns(rt);
-        if (t.length) {
+        const active = t.filter((type) => type.isActive);
+        if (active.length) {
           setForm((v) => {
-            const nextCode = v.leaveTypeCode || t[0].leaveTypeCode;
+            const nextCode = active.some((type) => type.leaveTypeCode === v.leaveTypeCode) ? v.leaveTypeCode : active[0].leaveTypeCode;
             if (nextCode === "ANNUAL" && v.startDate < minAnnualDate) {
               return { ...v, leaveTypeCode: nextCode, startDate: minAnnualDate, endDate: minAnnualDate };
             }
@@ -443,7 +746,7 @@ export function EmployeeLeavePage() {
             leaveReturnApi.getMine().catch(() => [] as LeaveReturnRequestDto[]),
           ])
             .then(([r, b, rt]) => {
-              setRequests(r);
+              setRequests([...r].sort((a, c) => c.id - a.id));
               setBalances(b);
               setReturns(rt);
             })
@@ -473,6 +776,9 @@ export function EmployeeLeavePage() {
     } else if (isWeekendDate(form.startDate) || isWeekendDate(form.endDate)) {
       notify({ ok: false, message: "Ngày bắt đầu và ngày kết thúc phải là ngày làm việc (thứ Hai đến thứ Sáu)." });
       return;
+    } else if (form.endDate < form.startDate) {
+      notify({ ok: false, message: "Ngày kết thúc không được trước ngày bắt đầu." });
+      return;
     } else if (isAnnualLeave && form.startDate < minAnnualDate) {
       notify({ ok: false, message: `Nghỉ có phép phải xin trước ít nhất 1 ngày. Ngày sớm nhất có thể xin: ${formatDate(minAnnualDate)}.` });
       return;
@@ -489,7 +795,7 @@ export function EmployeeLeavePage() {
           leaveTypeCode: form.leaveTypeCode,
           startDate: `${today}T${form.shortSlot}:00`,
           endDate: `${today}T${shortLeaveSlotLabel(form.shortSlot).split(" - ")[1]}:00`,
-          reason: form.reason,
+          reason: form.reason.trim(),
         });
       } else {
         await leaveRequestApi.submit({
@@ -497,7 +803,7 @@ export function EmployeeLeavePage() {
           startDate: `${form.startDate}T00:00:00`,
           endDate: `${form.endDate}T00:00:00`,
           session: isMultiDay ? "FullDay" : form.session,
-          reason: form.reason,
+          reason: form.reason.trim(),
         });
       }
       notify({ ok: true, message: "Đơn nghỉ phép đã được gửi." });
@@ -505,19 +811,25 @@ export function EmployeeLeavePage() {
       setForm((v) => ({ ...v, shortSlot: shortLeaveSlots[0], reason: "" }));
       load();
     } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
+      notify({ ok: false, message: errorMessage(err, "Đăng ký nghỉ thất bại") });
     } finally {
       setSending(false);
     }
   };
 
-  const cancel = async (id: number) => {
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
     try {
-      await leaveRequestApi.cancel(id);
-      notify({ ok: true, message: "Đã huỷ đơn nghỉ phép." });
+      await leaveRequestApi.cancel(cancelTarget.id);
+      notify({ ok: true, message: "Đã hủy đơn nghỉ phép." });
+      setCancelTarget(null);
       load();
     } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
+      notify({ ok: false, message: errorMessage(err, "Không thể hủy đơn.") });
+      setCancelTarget(null);
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -525,20 +837,26 @@ export function EmployeeLeavePage() {
   const shortLeaveBalance = balances.find((b) => b.unit === "Hours");
   const pending = requests.filter((r) => r.status === "Pending").length;
 
+  const filteredRequests = requests.filter(
+    (r) => (!statusFilter || r.status === statusFilter) && (!typeFilter || r.leaveTypeCode === typeFilter),
+  );
+
   return (
     <div className="page-stack">
       <PageHeader
         title="Xin nghỉ phép"
         description="Tạo đơn nghỉ, theo dõi trạng thái và số dư còn lại."
         action={
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button icon={<ArrowClockwiseRegular />} onClick={() => setReturnOpen(true)}>
-              Đi làm lại
-            </Button>
-            <Button appearance="primary" icon={<AddRegular />} onClick={() => setOpen(true)}>
-              Tạo đơn
-            </Button>
-          </div>
+          canSelf ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button icon={<ArrowClockwiseRegular />} onClick={() => setReturnOpen(true)}>
+                Đi làm lại
+              </Button>
+              <Button appearance="primary" icon={<AddRegular />} onClick={() => setOpen(true)}>
+                Tạo đơn
+              </Button>
+            </div>
+          ) : undefined
         }
       />
       {loading ? (
@@ -547,7 +865,7 @@ export function EmployeeLeavePage() {
         <>
           <MetricRail
             items={[
-              { label: "Ngày phép còn lại", value: `${remainingDays} ngày`, tone: "brand" },
+              { label: "Ngày phép còn lại", value: `${formatNumber(remainingDays)} ngày`, tone: "brand" },
               shortLeaveBalance
                 ? {
                     label: "Nghỉ ngắn tháng này",
@@ -558,108 +876,178 @@ export function EmployeeLeavePage() {
               { label: "Đang chờ duyệt", value: pending, tone: pending ? "warning" : "success" },
             ]}
           />
-          <SectionPanel title="Lịch sử đơn nghỉ">
-            {requests.length ? (
-              <div className="request-list">
-                {requests.map((item) => (
-                  <article key={item.id}>
-                    <div className="request-icon">
-                      <CalendarRegular />
-                    </div>
-                    <div className="request-main">
-                      <strong>{item.leaveTypeName}</strong>
-                      <span>
-                        {item.unit === "Hours"
-                          ? `${formatDate(item.startDate)}, ${formatTime(item.startDate)} - ${formatTime(item.endDate)}`
-                          : `${formatDate(item.startDate)} - ${formatDate(item.endDate)}${item.session ? ` · ${leaveSessionLabels[item.session]}` : ""}`}
-                        {" · "}
-                        {formatLeaveTime(item.totalTime, item.unit)}
-                      </span>
-                      <p>{item.reason}</p>
-                      {item.rejectionReason ? <small>Lý do từ chối: {item.rejectionReason}</small> : null}
-                    </div>
-                    <div className="row-actions">
-                      <RequestBadge status={item.status} />
-                      {item.status === "Pending" ? (
-                        <Button size="small" onClick={() => cancel(item.id)}>
-                          Huỷ
-                        </Button>
-                      ) : null}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="Chưa có đơn nghỉ"
-                description="Tạo đơn đầu tiên để bắt đầu quy trình duyệt."
-                actionLabel="Tạo đơn"
-                onAction={() => setOpen(true)}
-              />
-            )}
-          </SectionPanel>
-          <SectionPanel title="Yêu cầu đi làm lại của tôi">
-            {returns.length ? (
-              <div className="request-list">
-                {returns.map((item) => (
-                  <article key={item.id}>
-                    <div className="request-icon">
-                      <ArrowClockwiseRegular />
-                    </div>
-                    <div className="request-main">
-                      <strong>
-                        Từ {formatDate(item.fromDate)} · {sessionNames[item.fromSession]}
-                      </strong>
-                      <p>{item.reason}</p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {item.sessions.map((s) => (
-                          <span key={`${s.date}-${s.session}`} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-                            <small>
-                              {formatDate(s.date)} {sessionNames[s.session]}
-                            </small>
-                            <ReturnSessionBadge state={s.state} />
-                          </span>
-                        ))}
-                      </div>
-                      {item.status === "Rejected" && item.rejectionReason ? (
-                        <small>Lý do từ chối: {item.rejectionReason}</small>
-                      ) : null}
-                    </div>
-                    <div className="row-actions">
-                      <ReturnStatusBadge status={item.status} />
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                title="Chưa có yêu cầu đi làm lại"
-                description="Khi cần quay lại làm việc trong thời gian đã được duyệt nghỉ, hãy gửi yêu cầu tại đây."
-              />
-            )}
-          </SectionPanel>
-          <SectionPanel title="Số dư phép theo loại">
-            {balances.length ? (
-              <div className="compact-list">
-                {balances.map((balance) => (
-                  <div className="compact-row" key={`${balance.leaveTypeCode}-${balance.month ?? "y"}`}>
-                    <div>
-                      <strong>{balance.leaveTypeName}</strong>
-                      <span>{balance.month ? `Tháng ${balance.month}/${balance.year}` : `Năm ${balance.year}`}</span>
-                    </div>
-                    <strong>
-                      {formatLeaveTime(balance.remainingTime, balance.unit)} / {formatLeaveTime(balance.allocatedTime, balance.unit)}
-                    </strong>
-                    {balance.refundedTime && balance.refundedTime > 0 ? (
-                      <small>Đã hoàn {formatLeaveTime(balance.refundedTime, balance.unit)} do đi làm lại</small>
-                    ) : null}
+          <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(data.value as LeaveTab)}>
+            <Tab value="requests">Đơn nghỉ</Tab>
+            <Tab value="balances">Số dư</Tab>
+            <Tab value="calendar">Lịch</Tab>
+          </TabList>
+
+          {tab === "requests" ? (
+            <>
+              <SectionPanel title="Lịch sử đơn nghỉ">
+                <div className="leave-filters">
+                  <div className="view-toggle">
+                    {leaveStatusFilters.map((f) => (
+                      <Button
+                        key={f.label}
+                        size="small"
+                        appearance={statusFilter === f.value ? "primary" : "outline"}
+                        onClick={() => setStatusFilter(f.value)}
+                      >
+                        {f.label}
+                      </Button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="Chưa có số dư" description="Số dư nghỉ phép sẽ hiển thị sau khi quản trị viên cấu hình." />
-            )}
-          </SectionPanel>
+                  {leaveTypes.length > 1 ? (
+                    <Dropdown
+                      size="small"
+                      aria-label="Loại nghỉ"
+                      value={leaveTypes.find((t) => t.leaveTypeCode === typeFilter)?.leaveTypeName ?? "Tất cả loại nghỉ"}
+                      selectedOptions={[typeFilter ?? ""]}
+                      onOptionSelect={(_, data) => setTypeFilter(data.optionValue ? data.optionValue : null)}
+                    >
+                      <Option value="">Tất cả loại nghỉ</Option>
+                      {leaveTypes.map((t) => (
+                        <Option key={t.leaveTypeCode} value={t.leaveTypeCode}>
+                          {t.leaveTypeName}
+                        </Option>
+                      ))}
+                    </Dropdown>
+                  ) : null}
+                </div>
+                {filteredRequests.length ? (
+                  <div className="request-list">
+                    {filteredRequests.map((item) => (
+                      <article key={item.id} className="leave-request-item" onClick={() => setDetail(item)}>
+                        <div className="request-icon">
+                          <CalendarRegular />
+                        </div>
+                        <div className="request-main">
+                          <strong>{item.leaveTypeName}</strong>
+                          <span>
+                            Ngày nghỉ: {leaveDateLabel(item)} · {leaveTimeLabel(item)} · {formatLeaveTime(item.totalTime, item.unit)}
+                          </span>
+                          {item.reason ? <p>Lý do: {item.reason}</p> : null}
+                          {item.rejectionReason ? <small>Lý do từ chối: {item.rejectionReason}</small> : null}
+                        </div>
+                        <div className="row-actions">
+                          <RequestBadge status={item.status} />
+                          {item.status === "Pending" && canSelf ? (
+                            <Button
+                              size="small"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setCancelTarget(item);
+                              }}
+                            >
+                              Hủy đơn
+                            </Button>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title={requests.length ? "Không có đơn phù hợp" : "Chưa có đơn nghỉ"}
+                    description={
+                      requests.length
+                        ? "Không có đơn phù hợp bộ lọc."
+                        : "Chưa có đơn nghỉ. Tạo đơn đầu tiên để bắt đầu quy trình duyệt."
+                    }
+                    actionLabel={requests.length || !canSelf ? undefined : "Tạo đơn"}
+                    onAction={() => setOpen(true)}
+                  />
+                )}
+              </SectionPanel>
+              <SectionPanel title="Yêu cầu đi làm lại của tôi">
+                {returns.length ? (
+                  <div className="request-list">
+                    {returns.map((item) => (
+                      <article key={item.id}>
+                        <div className="request-icon">
+                          <ArrowClockwiseRegular />
+                        </div>
+                        <div className="request-main">
+                          <strong>
+                            Đi làm lại từ {formatDate(item.fromDate)} ({sessionNames[item.fromSession]})
+                          </strong>
+                          <p>Lý do: {item.reason}</p>
+                          <div className="return-session-lines">
+                            {item.sessions.map((s) => (
+                              <span key={`${s.date}-${s.session}`}>
+                                <small>
+                                  {formatDate(s.date)} · {sessionNames[s.session]} · đơn #{s.leaveRequestId}
+                                  {s.workedStatus ? ` · ${s.workedStatus === "Late" ? "đi muộn" : "đúng giờ"}` : ""}
+                                </small>
+                                <ReturnSessionBadge state={s.state} />
+                              </span>
+                            ))}
+                          </div>
+                          {item.status === "Rejected" && item.rejectionReason ? (
+                            <small>Lý do từ chối: {item.rejectionReason}</small>
+                          ) : null}
+                          {item.managerName ? <small>Quản lý: {item.managerName}</small> : null}
+                          {item.processedByName ? <small>Người xác nhận: {item.processedByName}</small> : null}
+                        </div>
+                        <div className="row-actions">
+                          <ReturnStatusBadge status={item.status} />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="Chưa có yêu cầu đi làm lại"
+                    description="Khi cần quay lại làm việc trong thời gian đã được duyệt nghỉ, hãy gửi yêu cầu tại đây."
+                  />
+                )}
+              </SectionPanel>
+            </>
+          ) : null}
+
+          {tab === "balances" ? (
+            <SectionPanel title="Số dư phép theo loại">
+              {balances.length ? (
+                <div className="compact-list">
+                  {balances.map((balance) => {
+                    const ratio = balance.allocatedTime <= 0 ? 0 : Math.min(1, balance.usedTime / balance.allocatedTime);
+                    return (
+                      <div className="compact-row leave-balance-row" key={`${balance.leaveTypeCode}-${balance.month ?? "y"}`}>
+                        <div>
+                          <strong>{balance.leaveTypeName}</strong>
+                          <span>{balance.month ? `Tháng ${balance.month}/${balance.year}` : `Năm ${balance.year}`}</span>
+                          <div className="leave-progress" aria-hidden>
+                            <i style={{ width: `${ratio * 100}%` }} />
+                          </div>
+                          <small>Đã dùng {formatLeaveTime(balance.usedTime, balance.unit)}</small>
+                          {balance.refundedTime && balance.refundedTime > 0 ? (
+                            <small className="leave-refunded">
+                              Đã hoàn {formatLeaveTime(balance.refundedTime, balance.unit)} do đi làm lại
+                            </small>
+                          ) : null}
+                        </div>
+                        <strong>
+                          {formatLeaveTime(balance.remainingTime, balance.unit)} / {formatLeaveTime(balance.allocatedTime, balance.unit)}
+                        </strong>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState
+                  title="Chưa có số dư"
+                  description="Chưa có số dư. Số dư nghỉ phép sẽ hiển thị sau khi quản trị viên cấu hình."
+                />
+              )}
+            </SectionPanel>
+          ) : null}
+
+          {tab === "calendar" ? (
+            <SectionPanel title="Lịch nghỉ">
+              <LeaveCalendar requests={requests} onOpen={setDetail} />
+            </SectionPanel>
+          ) : null}
         </>
       )}
 
@@ -671,6 +1059,85 @@ export function EmployeeLeavePage() {
           load();
         }}
       />
+
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        title="Hủy đơn nghỉ phép"
+        description={
+          cancelTarget
+            ? `Bạn có chắc muốn hủy đơn ${cancelTarget.leaveTypeName} (${leaveDateLabel(cancelTarget)}) không?`
+            : ""
+        }
+        confirmLabel="Hủy đơn"
+        confirming={cancelling}
+        onConfirm={confirmCancel}
+        onCancel={() => setCancelTarget(null)}
+      />
+
+      <Dialog open={Boolean(detail)} onOpenChange={(_, data) => !data.open && setDetail(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Chi tiết đơn nghỉ</DialogTitle>
+            <DialogContent>
+              {detail ? (
+                <dl className="detail-list">
+                  <div>
+                    <dt>Trạng thái</dt>
+                    <dd>
+                      <RequestBadge status={detail.status} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Loại nghỉ</dt>
+                    <dd>{detail.leaveTypeName}</dd>
+                  </div>
+                  <div>
+                    <dt>Ngày nghỉ</dt>
+                    <dd>{leaveDateLabel(detail)}</dd>
+                  </div>
+                  <div>
+                    <dt>Thời gian</dt>
+                    <dd>{leaveTimeLabel(detail)}</dd>
+                  </div>
+                  <div>
+                    <dt>Tổng thời gian</dt>
+                    <dd>{formatLeaveTime(detail.totalTime, detail.unit)}</dd>
+                  </div>
+                  {detail.reason ? (
+                    <div>
+                      <dt>Lý do</dt>
+                      <dd>{detail.reason}</dd>
+                    </div>
+                  ) : null}
+                  {detail.approverName ? (
+                    <div>
+                      <dt>Người duyệt</dt>
+                      <dd>{detail.approverName}</dd>
+                    </div>
+                  ) : null}
+                  {detail.approvedAt ? (
+                    <div>
+                      <dt>Xử lý lúc</dt>
+                      <dd>{format(new Date(detail.approvedAt), "dd/MM/yyyy HH:mm")}</dd>
+                    </div>
+                  ) : null}
+                  {detail.rejectionReason ? (
+                    <div>
+                      <dt>Lý do từ chối</dt>
+                      <dd>{detail.rejectionReason}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="primary" onClick={() => setDetail(null)}>
+                Đóng
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
         <DialogSurface>
@@ -691,13 +1158,14 @@ export function EmployeeLeavePage() {
                     })
                   }
                 >
-                  {leaveTypes.map((t) => (
+                  {activeTypes.map((t) => (
                     <Option key={t.leaveTypeCode} value={t.leaveTypeCode}>
                       {t.leaveTypeName}
                     </Option>
                   ))}
                 </Dropdown>
-                {!leaveTypes.length ? <FieldError message="Chưa có loại nghỉ nào được cấu hình." /> : null}
+                {!activeTypes.length ? <FieldError message="Chưa có loại nghỉ nào được cấu hình." /> : null}
+                {selectedType?.description ? <p className="field-hint">{selectedType.description}</p> : null}
               </Field>
 
               {isShortLeave ? (
@@ -722,19 +1190,26 @@ export function EmployeeLeavePage() {
                     <Field
                       label="Từ ngày"
                       required
-                      hint={isAnnualLeave ? `Chọn ngày làm việc (thứ Hai đến thứ Sáu). Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc.` : "Chọn ngày làm việc (thứ Hai đến thứ Sáu)."}
+                      hint={isAnnualLeave ? `Chọn ngày làm việc (thứ Hai đến thứ Sáu). Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc (sớm nhất ${formatDate(minAnnualDate)}).` : "Chọn ngày làm việc (thứ Hai đến thứ Sáu)."}
                     >
                       <Input
                         type="date"
-                        min={isAnnualLeave ? minAnnualDate : undefined}
+                        min={isAnnualLeave ? minAnnualDate : minLeaveDate}
                         value={form.startDate}
-                        onChange={(_, data) => setForm((v) => ({ ...v, startDate: data.value }))}
+                        onChange={(_, data) =>
+                          setForm((v) => ({
+                            ...v,
+                            startDate: data.value,
+                            // Ngày kết thúc không được trước ngày bắt đầu.
+                            endDate: data.value && v.endDate < data.value ? data.value : v.endDate,
+                          }))
+                        }
                       />
                     </Field>
                     <Field label="Đến ngày" required>
                       <Input
                         type="date"
-                        min={isAnnualLeave ? minAnnualDate : undefined}
+                        min={form.startDate || undefined}
                         value={form.endDate}
                         onChange={(_, data) => setForm((v) => ({ ...v, endDate: data.value }))}
                       />
@@ -764,6 +1239,7 @@ export function EmployeeLeavePage() {
               <Field label="Lý do" required>
                 <Textarea
                   resize="vertical"
+                  placeholder="Nhập lý do chi tiết..."
                   value={form.reason}
                   onChange={(_, data) => setForm((v) => ({ ...v, reason: data.value }))}
                 />
@@ -867,9 +1343,13 @@ function ReturnLeaveDialog({
         <DialogBody>
           <DialogTitle>Đi làm lại</DialogTitle>
           <DialogContent className="form-stack">
+            <p className="field-hint">
+              Dùng khi bạn đã được duyệt nghỉ nhưng muốn đi làm lại. Chỉ chọn được buổi chưa bắt đầu; hệ thống tự đi
+              làm lại đến hết đợt nghỉ liên tục.
+            </p>
             <div className="form-grid">
               <Field label="Bắt đầu đi làm lại từ ngày" required>
-                <Input type="date" value={fromDate} onChange={(_, data) => setFromDate(data.value)} />
+                <Input type="date" min={isoDate()} value={fromDate} onChange={(_, data) => setFromDate(data.value)} />
               </Field>
               <Field label="Buổi" required>
                 <Dropdown
@@ -897,6 +1377,7 @@ function ReturnLeaveDialog({
                     </span>
                     <small>
                       {s.leaveTypeName} (đơn #{s.leaveRequestId})
+                      {s.workedStatus ? ` · ${s.workedStatus === "Late" ? "đi muộn" : "đúng giờ"}` : ""}
                     </small>
                   </div>
                 ))}

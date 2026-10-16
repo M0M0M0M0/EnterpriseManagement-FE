@@ -35,7 +35,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { useMenuStore } from "../store/useMenuStore";
 import type { UserRole } from "../types/domain";
 import { NotificationBell } from "./NotificationBell";
-import { EmployeeAvatar } from "./ui";
+import { ConfirmDialog, EmployeeAvatar } from "./ui";
 
 interface NavItem {
   to: string;
@@ -97,6 +97,8 @@ const roleLabels: Record<UserRole, string> = {
 function pageTitleFor(pathname: string, items: NavItem[]) {
   if (pathname.startsWith("/profile")) return "Hồ sơ của tôi";
   if (pathname.startsWith("/account-settings")) return "Cài đặt tài khoản";
+  if (pathname.startsWith("/privacy")) return "Chính sách quyền riêng tư";
+  if (pathname.startsWith("/notifications")) return "Thông báo";
   return items.find((item) => pathname.startsWith(item.to))?.label ?? "EMS";
 }
 
@@ -131,6 +133,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const menus = useMenuStore((state) => state.menus);
   const menuStatus = useMenuStore((state) => state.status);
   const loadMenus = useMenuStore((state) => state.load);
@@ -225,7 +228,10 @@ export function AppShell() {
                   <MenuItem icon={<SettingsRegular />} onClick={() => navigate("/account-settings")}>
                     Cài đặt tài khoản
                   </MenuItem>
-                  <MenuItem icon={<SignOutRegular />} onClick={doLogout}>
+                  <MenuItem icon={<ShieldRegular />} onClick={() => navigate("/privacy")}>
+                    Chính sách quyền riêng tư
+                  </MenuItem>
+                  <MenuItem icon={<SignOutRegular />} onClick={() => setConfirmLogout(true)}>
                     Đăng xuất
                   </MenuItem>
                 </MenuList>
@@ -249,6 +255,17 @@ export function AppShell() {
           </nav>
         ) : null}
       </div>
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Đăng xuất"
+        description="Bạn có chắc muốn đăng xuất khỏi ứng dụng?"
+        confirmLabel="Đăng xuất"
+        onConfirm={() => {
+          setConfirmLogout(false);
+          doLogout();
+        }}
+        onCancel={() => setConfirmLogout(false)}
+      />
       <Toaster toasterId="app-toaster" position="top-end" />
     </div>
   );

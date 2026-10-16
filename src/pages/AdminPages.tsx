@@ -13,12 +13,21 @@ import {
   Input,
   Option,
   Spinner,
+  Switch,
   Textarea,
 } from "@fluentui/react-components";
-import { AddRegular, CopyRegular, EyeOffRegular, EyeRegular } from "@fluentui/react-icons";
+import {
+  AddRegular,
+  ArrowClockwiseRegular,
+  CopyRegular,
+  EyeOffRegular,
+  EyeRegular,
+  SearchRegular,
+} from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
+import { useCan } from "../hooks/useCan";
 import {
   departmentApi,
   employeeApi,
@@ -39,6 +48,15 @@ import type {
 } from "../types/domain";
 import { formatCurrency, formatDate, formatDateTime } from "../utils/format";
 
+// Nút tải lại danh sách (tương đương kéo-để-tải bên mobile).
+function ReloadButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button icon={<ArrowClockwiseRegular />} onClick={onClick}>
+      Tải lại
+    </Button>
+  );
+}
+
 const NO_MANAGER = "__none__";
 const DEFAULT_ROLE = "__default__";
 const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
@@ -56,6 +74,8 @@ const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
 // Người còn làm việc (kể cả thử việc, đang nghỉ phép); chỉ Resigned/Terminated/Inactive mới là đã nghỉ.
 const isWorking = (status: string) => !["Resigned", "Terminated", "Inactive"].includes(status);
 
+const GENDER_LABEL: Record<string, string> = { Male: "Nam", Female: "Nữ", Other: "Khác" };
+
 type Credential = { username: string; password: string; isReset: boolean };
 type PendingAction =
   | { kind: "resign"; employee: EmployeeDto }
@@ -64,6 +84,9 @@ type PendingAction =
 
 export function AdminEmployeesPage() {
   const notify = useNotify();
+  const can = useCan();
+  const canManage = can("employee.manage");
+  const canAccount = can("user.manage");
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [positions, setPositions] = useState<PositionDto[]>([]);
@@ -78,6 +101,12 @@ export function AdminEmployeesPage() {
   const [confirming, setConfirming] = useState(false);
   const [credential, setCredential] = useState<Credential | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [search, setSearch] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [detail, setDetail] = useState<EmployeeDto | null>(null);
+  // Đã tự chọn vai trò thì không đổi theo chức vụ nữa (khi tạo mới).
+  const [roleTouched, setRoleTouched] = useState(false);
 
   const [form, setForm] = useState({
     firstName: "",
@@ -101,7 +130,13 @@ export function AdminEmployeesPage() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([employeeApi.getAll(), departmentApi.getAll(), positionApi.getAll(), roleApi.getAll()])
+    // Không có quyền xem vai trò thì danh sách rỗng, vai trò khi tạo mới do backend gán theo chức vụ.
+    Promise.all([
+      employeeApi.getAll(),
+      departmentApi.getAll(),
+      positionApi.getAll(),
+      roleApi.getAll().catch(() => [] as RoleDto[]),
+    ])
       .then(([e, d, p, r]) => {
         setEmployees(e);
         setDepartments(d);
@@ -131,6 +166,7 @@ export function AdminEmployeesPage() {
     setEditing(null);
     setManagerQuery("");
     setFormError("");
+    setRoleTouched(false);
     setForm((v) => ({
       ...v,
       firstName: "",
@@ -181,7 +217,11 @@ export function AdminEmployeesPage() {
   };
 
   const selectPosition = (positionCode: string) => {
-    setForm((v) => ({ ...v, positionCode, roleCode: editing ? v.roleCode : defaultRoleFor(positionCode) }));
+    setForm((v) => ({
+      ...v,
+      positionCode,
+      roleCode: editing || roleTouched ? v.roleCode : defaultRoleFor(positionCode),
+    }));
   };
 
   const handleManagerSelect = (optionValue: string | undefined) => {
@@ -203,11 +243,17 @@ export function AdminEmployeesPage() {
   const validate = (): string => {
     if (!form.departmentCode || !form.positionCode) return "Vui lòng chọn phòng ban và chức vụ.";
     if (!form.firstName.trim() || !form.lastName.trim()) return "Vui lòng nhập đủ họ tên.";
-    if (!EMAIL_PATTERN.test(form.email.trim())) return "Email không đúng định dạng.";
-    if (editing) return form.roleCodes.length ? "" : "Nhân viên phải có ít nhất một vai trò.";
-    if (!USERNAME_PATTERN.test(form.username.trim())) {
-      return "Tên đăng nhập dài 3-50 ký tự, chỉ gồm chữ không dấu, số, dấu chấm, gạch dưới và gạch ngang.";
+    if (!editing) {
+      const username = form.username.trim();
+      if (!username) return "Vui lòng nhập tên đăng nhập.";
+      if (!USERNAME_PATTERN.test(username)) {
+        return "Tên đăng nhập gồm 3-50 ký tự: chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.";
+      }
     }
+    const email = form.email.trim();
+    if (!email) return "Vui lòng nhập email.";
+    if (!EMAIL_PATTERN.test(email)) return "Email không đúng định dạng.";
+    if (editing && !form.roleCodes.length) return "Vui lòng chọn ít nhất một vai trò.";
     return "";
   };
 
@@ -252,7 +298,7 @@ export function AdminEmployeesPage() {
           managerCode: form.managerCode || undefined,
           hireDate: form.hireDate,
         });
-        notify({ ok: true, message: "Đã thêm nhân viên và tạo tài khoản đăng nhập." });
+        notify({ ok: true, message: "Đã thêm nhân viên mới." });
         setOpen(false);
         showCredential(result.employee.username || username, result.generatedPassword, false);
       }
@@ -285,15 +331,15 @@ export function AdminEmployeesPage() {
         notify({ ok: true, message: "Đã đặt lại mật khẩu." });
       } else if (kind === "lock") {
         await userApi.setActive(employee.username, !employee.isAccountActive);
-        notify({ ok: true, message: employee.isAccountActive ? "Đã khoá tài khoản." : "Đã mở khoá tài khoản." });
+        notify({ ok: true, message: employee.isAccountActive ? "Đã khoá tài khoản." : "Đã mở tài khoản." });
       } else {
         const resigning = isWorking(employee.employmentStatus);
         await employeeApi.setActive(employee.employeeCode, !resigning);
         notify({
           ok: true,
           message: resigning
-            ? "Đã cho nghỉ việc, tài khoản đăng nhập cũng đã bị khoá."
-            : "Đã phục hồi nhân viên, tài khoản đăng nhập đã được mở lại.",
+            ? "Đã cho nghỉ việc và khoá tài khoản."
+            : "Đã phục hồi nhân viên và mở tài khoản.",
         });
       }
       setPending(null);
@@ -314,7 +360,7 @@ export function AdminEmployeesPage() {
     }
     try {
       await userApi.setActive(employee.username, true);
-      notify({ ok: true, message: "Đã mở khoá tài khoản." });
+      notify({ ok: true, message: "Đã mở tài khoản." });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -327,26 +373,26 @@ export function AdminEmployeesPage() {
     if (kind === "reset") {
       return {
         title: "Đặt lại mật khẩu?",
-        description: `Mật khẩu hiện tại của "${employee.username}" sẽ bị thay bằng một mật khẩu mới do hệ thống sinh ra.`,
-        label: "Đặt lại mật khẩu",
+        description: `Tạo mật khẩu tạm mới cho "${employee.username}". Mật khẩu cũ sẽ không dùng được nữa.`,
+        label: "Đặt lại",
       };
     }
     if (kind === "lock") {
       return {
         title: "Khoá tài khoản?",
-        description: `Tài khoản "${employee.username}" sẽ không thể đăng nhập cho đến khi được mở khoá lại. Trạng thái làm việc của nhân viên không đổi.`,
+        description: `Tài khoản "${employee.username}" sẽ không thể đăng nhập cho đến khi được mở lại. Trạng thái làm việc không đổi.`,
         label: "Khoá tài khoản",
       };
     }
     return isWorking(employee.employmentStatus)
       ? {
           title: "Cho nhân viên nghỉ việc?",
-          description: `Nhân viên "${employee.fullName}" sẽ chuyển sang trạng thái đã nghỉ việc, không thể chấm công/xin nghỉ nữa và tài khoản đăng nhập cũng bị khoá cho đến khi được phục hồi.`,
+          description: `Nhân viên "${employee.fullName}" sẽ chuyển sang trạng thái Đã nghỉ việc và tài khoản đăng nhập "${employee.username}" sẽ bị khoá.`,
           label: "Cho nghỉ việc",
         }
       : {
           title: "Phục hồi nhân viên?",
-          description: `Nhân viên "${employee.fullName}" sẽ quay lại trạng thái đang làm việc và tài khoản đăng nhập cũng được mở lại.`,
+          description: `Nhân viên "${employee.fullName}" sẽ trở lại trạng thái Đang làm việc và tài khoản đăng nhập "${employee.username}" sẽ được mở lại.`,
           label: "Phục hồi",
         };
   })();
@@ -377,10 +423,35 @@ export function AdminEmployeesPage() {
     : managerCandidates;
 
   // Vai trò đang gán nhưng đã bị khoá vẫn hiện trong ô chọn để không mất khi lưu.
-  const editableRoles = [
+  // Vai trò hiện có của nhân viên nhưng không nằm trong danh sách (thiếu quyền xem) cũng hiện để giữ.
+  const editableRoles: RoleDto[] = [
     ...activeRoles,
     ...roles.filter((r) => !r.isActive && form.roleCodes.includes(r.roleCode)),
+    ...(editing?.roleCodes ?? [])
+      .map((code, i) => ({ code, name: editing?.roleNames?.[i] ?? code }))
+      .filter((r) => !roles.some((x) => x.roleCode === r.code))
+      .map((r) => ({ roleCode: r.code, roleName: r.name, permissions: [] as string[], isActive: true })),
   ];
+
+  const managerName = (e: EmployeeDto) => {
+    if (!e.managerCode) return "";
+    return employees.find((m) => m.employeeCode === e.managerCode)?.fullName ?? e.managerName ?? e.managerCode;
+  };
+
+  // Trạng thái làm việc đang có trong dữ liệu, dùng cho ô lọc.
+  const statuses = Array.from(new Set(employees.map((e) => e.employmentStatus))).sort();
+  const keyword = search.trim().toLowerCase();
+  const visibleEmployees = employees.filter((e) => {
+    if (departmentFilter && e.departmentCode !== departmentFilter) return false;
+    if (statusFilter && e.employmentStatus !== statusFilter) return false;
+    if (!keyword) return true;
+    return (
+      e.fullName.toLowerCase().includes(keyword) ||
+      e.employeeCode.toLowerCase().includes(keyword) ||
+      (e.email ?? "").toLowerCase().includes(keyword) ||
+      e.username.toLowerCase().includes(keyword)
+    );
+  });
 
   return (
     <div className="page-stack">
@@ -388,14 +459,63 @@ export function AdminEmployeesPage() {
         title="Quản lý nhân viên"
         description="Hồ sơ và tài khoản đăng nhập của nhân viên: tạo mới, sửa, đặt lại mật khẩu, khoá/mở tài khoản, cho nghỉ việc."
         action={
-          <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
-            Thêm nhân viên
-          </Button>
+          <div className="row-actions">
+            <ReloadButton onClick={load} />
+            {canManage ? (
+              <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
+                Thêm nhân viên
+              </Button>
+            ) : null}
+          </div>
         }
       />
+      <SectionPanel>
+        <div className="filter-grid">
+          <Field label="Tìm kiếm">
+            <Input
+              contentBefore={<SearchRegular />}
+              placeholder="Tìm theo tên, mã, email, tên đăng nhập"
+              value={search}
+              onChange={(_, data) => setSearch(data.value)}
+            />
+          </Field>
+          <Field label="Phòng ban">
+            <Dropdown
+              value={departments.find((d) => d.departmentCode === departmentFilter)?.departmentName ?? "Tất cả"}
+              selectedOptions={[departmentFilter]}
+              onOptionSelect={(_, data) => setDepartmentFilter(data.optionValue ?? "")}
+            >
+              <Option value="" text="Tất cả">
+                Tất cả
+              </Option>
+              {departments.map((d) => (
+                <Option key={d.departmentCode} value={d.departmentCode} text={d.departmentName}>
+                  {d.departmentName}
+                </Option>
+              ))}
+            </Dropdown>
+          </Field>
+          <Field label="Trạng thái">
+            <Dropdown
+              value={statusFilter ? (EMPLOYMENT_STATUS_LABEL[statusFilter] ?? statusFilter) : "Tất cả"}
+              selectedOptions={[statusFilter]}
+              onOptionSelect={(_, data) => setStatusFilter(data.optionValue ?? "")}
+            >
+              <Option value="" text="Tất cả">
+                Tất cả
+              </Option>
+              {statuses.map((st) => (
+                <Option key={st} value={st} text={EMPLOYMENT_STATUS_LABEL[st] ?? st}>
+                  {EMPLOYMENT_STATUS_LABEL[st] ?? st}
+                </Option>
+              ))}
+            </Dropdown>
+          </Field>
+        </div>
+      </SectionPanel>
       {loading ? (
         <Spinner label="Đang tải..." />
-      ) : employees.length ? (
+      ) : visibleEmployees.length ? (
         <div className="enterprise-table-wrap">
           <table className="enterprise-table">
             <thead>
@@ -406,6 +526,7 @@ export function AdminEmployeesPage() {
                 <th>Vai trò</th>
                 <th>Phòng ban</th>
                 <th>Chức vụ</th>
+                <th>Quản lý</th>
                 <th>Trạng thái làm việc</th>
                 <th>Tài khoản</th>
                 <th>Đăng nhập cuối</th>
@@ -413,14 +534,19 @@ export function AdminEmployeesPage() {
               </tr>
             </thead>
             <tbody>
-              {employees.map((e) => (
+              {visibleEmployees.map((e) => (
                 <tr key={e.employeeCode}>
                   <td>{e.employeeCode}</td>
-                  <td>{e.fullName}</td>
+                  <td>
+                    <Button appearance="transparent" size="small" onClick={() => setDetail(e)}>
+                      {e.fullName}
+                    </Button>
+                  </td>
                   <td>{e.username}</td>
                   <td>{e.roleNames?.join(", ") || "--"}</td>
                   <td>{e.departmentName}</td>
                   <td>{e.positionName}</td>
+                  <td>{managerName(e) || "--"}</td>
                   <td>
                     <Badge appearance="tint" color={isWorking(e.employmentStatus) ? "success" : "subtle"}>
                       {EMPLOYMENT_STATUS_LABEL[e.employmentStatus] ?? e.employmentStatus}
@@ -434,18 +560,26 @@ export function AdminEmployeesPage() {
                   <td>{e.lastLoginAt ? formatDateTime(e.lastLoginAt) : "--"}</td>
                   <td>
                     <div className="row-actions">
-                      <Button size="small" onClick={() => openEdit(e)}>
-                        Sửa
-                      </Button>
-                      <Button size="small" onClick={() => setPending({ kind: "reset", employee: e })}>
-                        Đặt lại mật khẩu
-                      </Button>
-                      <Button size="small" onClick={() => toggleAccount(e)}>
-                        {e.isAccountActive ? "Khoá tài khoản" : "Mở tài khoản"}
-                      </Button>
-                      <Button size="small" onClick={() => setPending({ kind: "resign", employee: e })}>
-                        {isWorking(e.employmentStatus) ? "Cho nghỉ việc" : "Phục hồi"}
-                      </Button>
+                      {canManage ? (
+                        <Button size="small" onClick={() => openEdit(e)}>
+                          Sửa
+                        </Button>
+                      ) : null}
+                      {canAccount ? (
+                        <Button size="small" onClick={() => setPending({ kind: "reset", employee: e })}>
+                          Đặt lại mật khẩu
+                        </Button>
+                      ) : null}
+                      {canAccount ? (
+                        <Button size="small" onClick={() => toggleAccount(e)}>
+                          {e.isAccountActive ? "Khoá tài khoản" : "Mở tài khoản"}
+                        </Button>
+                      ) : null}
+                      {canManage ? (
+                        <Button size="small" onClick={() => setPending({ kind: "resign", employee: e })}>
+                          {isWorking(e.employmentStatus) ? "Cho nghỉ việc" : "Phục hồi"}
+                        </Button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -454,17 +588,62 @@ export function AdminEmployeesPage() {
           </table>
         </div>
       ) : (
-        <EmptyState title="Chưa có nhân viên" description="Thêm nhân viên đầu tiên cho hệ thống." />
+        <EmptyState
+          title={employees.length ? "Không có nhân viên phù hợp." : "Chưa có nhân viên"}
+          description={employees.length ? "Thử đổi từ khoá hoặc bộ lọc." : "Thêm nhân viên đầu tiên cho hệ thống."}
+        />
       )}
+
+      <Dialog open={detail !== null} onOpenChange={(_, data) => !data.open && setDetail(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{detail?.fullName}</DialogTitle>
+            <DialogContent>
+              {detail ? (
+                <dl className="detail-list">
+                  {(
+                    [
+                      ["Mã NV", detail.employeeCode],
+                      ["Tên đăng nhập", detail.username],
+                      ["Vai trò", detail.roleNames?.length ? detail.roleNames.join(", ") : (detail.roleCodes ?? []).join(", ")],
+                      ["Tài khoản", detail.isAccountActive ? "Hoạt động" : "Đã khoá"],
+                      ["Đăng nhập cuối", detail.lastLoginAt ? formatDateTime(detail.lastLoginAt) : ""],
+                      ["Email", detail.email],
+                      ["Điện thoại", detail.phone ?? ""],
+                      ["Địa chỉ", detail.address ?? ""],
+                      ["Ngày sinh", detail.dateOfBirth ? formatDate(detail.dateOfBirth) : ""],
+                      ["Giới tính", GENDER_LABEL[detail.gender ?? ""] ?? ""],
+                      ["Phòng ban", detail.departmentName],
+                      ["Chức vụ", detail.positionName],
+                      ["Quản lý", managerName(detail)],
+                      ["Ngày vào làm", detail.hireDate ? formatDate(detail.hireDate) : ""],
+                      ["Trạng thái", EMPLOYMENT_STATUS_LABEL[detail.employmentStatus] ?? detail.employmentStatus],
+                    ] as [string, string][]
+                  ).map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value || "--"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="primary" onClick={() => setDetail(null)}>
+                Đóng
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       <Dialog open={credential !== null} onOpenChange={(_, data) => !data.open && setCredential(null)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>{credential?.isReset ? "Mật khẩu mới" : "Tài khoản đã được tạo"}</DialogTitle>
+            <DialogTitle>{credential?.isReset ? "Đã đặt lại mật khẩu" : "Thông tin đăng nhập vừa tạo"}</DialogTitle>
             <DialogContent className="form-stack">
               <p>
-                Gửi thông tin đăng nhập dưới đây cho nhân viên. Mật khẩu chỉ hiển thị một lần, đóng hộp thoại sẽ không
-                xem lại được.
+                Gửi thông tin dưới đây cho nhân viên. Mật khẩu chỉ hiển thị một lần.
               </p>
               {credential ? (
                 <dl className="detail-list">
@@ -473,7 +652,7 @@ export function AdminEmployeesPage() {
                     <dd>{credential.username}</dd>
                   </div>
                   <div>
-                    <dt>Mật khẩu</dt>
+                    <dt>Mật khẩu tạm</dt>
                     <dd className="credential-password-row">
                       <strong className="credential-password">
                         {showPassword ? credential.password : "•".repeat(credential.password.length)}
@@ -526,7 +705,7 @@ export function AdminEmployeesPage() {
               {!editing ? (
                 <div className="form-grid">
                   <Field label="Ngày sinh">
-                    <Input type="date" value={form.dateOfBirth} onChange={(_, data) => setForm((v) => ({ ...v, dateOfBirth: data.value }))} />
+                    <Input type="date" max={formatDate(new Date().toISOString(), "yyyy-MM-dd")} value={form.dateOfBirth} onChange={(_, data) => setForm((v) => ({ ...v, dateOfBirth: data.value }))} />
                   </Field>
                   <Field label="Giới tính">
                     <Dropdown
@@ -618,7 +797,7 @@ export function AdminEmployeesPage() {
                 </Field>
               </div>
               {editing ? (
-                <Field label="Vai trò" required hint="Chọn ít nhất một vai trò.">
+                <Field label="Vai trò" required hint="Chọn một hoặc nhiều vai trò.">
                   <Dropdown
                     multiselect
                     value={form.roleCodes.map(roleName).join(", ")}
@@ -633,22 +812,29 @@ export function AdminEmployeesPage() {
                   </Dropdown>
                 </Field>
               ) : (
+                !activeRoles.length ? (
+                  <p>Vai trò sẽ được gán theo chức vụ đã chọn.</p>
+                ) : (
                 <Field label="Vai trò" hint="Mặc định theo chức vụ, có thể đổi.">
                   <Dropdown
-                    value={form.roleCode === DEFAULT_ROLE ? "Theo chức vụ" : roleName(form.roleCode)}
+                    value={form.roleCode === DEFAULT_ROLE ? "Mặc định theo chức vụ" : roleName(form.roleCode)}
                     selectedOptions={[form.roleCode]}
-                    onOptionSelect={(_, data) => setForm((v) => ({ ...v, roleCode: data.optionValue ?? DEFAULT_ROLE }))}
+                    onOptionSelect={(_, data) => {
+                      setRoleTouched(true);
+                      setForm((v) => ({ ...v, roleCode: data.optionValue ?? DEFAULT_ROLE }));
+                    }}
                   >
-                    <Option value={DEFAULT_ROLE} text="Theo chức vụ">
-                      Theo chức vụ
+                    <Option value={DEFAULT_ROLE} text="Mặc định theo chức vụ">
+                      Mặc định theo chức vụ
                     </Option>
                     {activeRoles.map((r) => (
-                      <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
-                        {r.roleName}
+                      <Option key={r.roleCode} value={r.roleCode} text={`${r.roleName} (${r.roleCode})`}>
+                        {`${r.roleName} (${r.roleCode})`}
                       </Option>
                     ))}
                   </Dropdown>
                 </Field>
+                )
               )}
               {formError ? <FieldError message={formError} /> : null}
             </DialogContent>
@@ -677,6 +863,7 @@ export function AdminEmployeesPage() {
 
 export function AdminDepartmentsPage() {
   const notify = useNotify();
+  const canManage = useCan()("department.manage");
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [deptOpen, setDeptOpen] = useState(false);
@@ -830,35 +1017,48 @@ export function AdminDepartmentsPage() {
         title="Phòng ban"
         description="Toàn quyền tạo, sửa, khóa/mở phòng ban."
         action={
-          <Button appearance="primary" icon={<AddRegular />} onClick={() => setDeptOpen(true)}>
-            Thêm phòng ban
-          </Button>
+          <div className="row-actions">
+            <ReloadButton onClick={load} />
+            {canManage ? (
+              <Button appearance="primary" icon={<AddRegular />} onClick={() => setDeptOpen(true)}>
+                Thêm phòng ban
+              </Button>
+            ) : null}
+          </div>
         }
       />
       {loading ? (
         <Spinner label="Đang tải..." />
       ) : (
         <SectionPanel title="Danh sách phòng ban">
+          {departments.length === 0 ? <EmptyState title="Chưa có phòng ban." description="Bấm Thêm phòng ban để tạo mới." /> : null}
           <div className="compact-list">
             {departments.map((d) => (
               <div className="compact-row" key={d.departmentCode}>
                 <div>
                   <strong>{d.departmentName}</strong>
-                  <span>{d.departmentCode} · {d.managerName ?? "Chưa có quản lý"}</span>
+                  <span>
+                    Mã: {d.departmentCode} · Trưởng phòng: {d.managerName ?? "Chưa có quản lý"}
+                    {d.description ? ` · Mô tả: ${d.description}` : ""}
+                  </span>
                 </div>
                 <div className="row-actions">
                   <Badge appearance="tint" color={d.isActive ? "success" : "subtle"}>
                     {d.isActive ? "Hoạt động" : "Ngừng"}
                   </Badge>
-                  <Button size="small" onClick={() => openEditDept(d)}>
-                    Sửa
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => (d.isActive ? setLockDeptTarget(d) : toggleDepartment(d))}
-                  >
-                    {d.isActive ? "Khóa" : "Mở khóa"}
-                  </Button>
+                  {canManage ? (
+                    <Button size="small" onClick={() => openEditDept(d)}>
+                      Sửa
+                    </Button>
+                  ) : null}
+                  {canManage ? (
+                    <Button
+                      size="small"
+                      onClick={() => (d.isActive ? setLockDeptTarget(d) : toggleDepartment(d))}
+                    >
+                      {d.isActive ? "Khóa" : "Mở khóa"}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -975,6 +1175,11 @@ export function AdminDepartmentsPage() {
 
 export function AdminPositionsPage() {
   const notify = useNotify();
+  const canManage = useCan()("position.manage");
+  const [salaryTarget, setSalaryTarget] = useState<PositionDto | null>(null);
+  const [salaryText, setSalaryText] = useState("");
+  const [salaryError, setSalaryError] = useState("");
+  const [savingSalary, setSavingSalary] = useState(false);
   const [positions, setPositions] = useState<PositionDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [posOpen, setPosOpen] = useState(false);
@@ -1045,6 +1250,32 @@ export function AdminPositionsPage() {
     }
   };
 
+  const openSalary = (p: PositionDto) => {
+    setSalaryTarget(p);
+    setSalaryText(p.standardSalary == null ? "" : String(Math.round(p.standardSalary)));
+    setSalaryError("");
+  };
+
+  const submitSalary = async () => {
+    if (!salaryTarget) return;
+    const value = Number(salaryText.trim().replace(/[.,\s]/g, ""));
+    if (!salaryText.trim() || !Number.isFinite(value) || value < 0) {
+      setSalaryError("Lương chuẩn không hợp lệ.");
+      return;
+    }
+    setSavingSalary(true);
+    try {
+      await positionApi.setStandardSalary(salaryTarget.positionCode, value);
+      notify({ ok: true, message: "Đã cập nhật lương chuẩn." });
+      setSalaryTarget(null);
+      load();
+    } catch (err) {
+      setSalaryError(errorMessage(err));
+    } finally {
+      setSavingSalary(false);
+    }
+  };
+
   const togglePosition = async (p: PositionDto) => {
     try {
       await positionApi.setActive(p.positionCode, !p.isActive);
@@ -1072,38 +1303,52 @@ export function AdminPositionsPage() {
         title="Chức vụ"
         description="Toàn quyền tạo, sửa, khóa/mở chức vụ — chỉ là chức danh hiển thị, không gắn với vai trò. Vai trò được chọn riêng khi tạo tài khoản."
         action={
-          <Button appearance="primary" icon={<AddRegular />} onClick={openCreatePosition}>
-            Thêm chức vụ
-          </Button>
+          <div className="row-actions">
+            <ReloadButton onClick={load} />
+            {canManage ? (
+              <Button appearance="primary" icon={<AddRegular />} onClick={openCreatePosition}>
+                Thêm chức vụ
+              </Button>
+            ) : null}
+          </div>
         }
       />
       {loading ? (
         <Spinner label="Đang tải..." />
       ) : (
         <SectionPanel title="Danh sách chức vụ">
+          {positions.length === 0 ? <EmptyState title="Chưa có chức vụ." description="Bấm Thêm chức vụ để tạo mới." /> : null}
           <div className="compact-list">
             {positions.map((p) => (
               <div className="compact-row" key={p.positionCode}>
                 <div>
                   <strong>{p.positionName}</strong>
                   <span>
-                    {p.positionCode} ·{" "}
+                    Mã: {p.positionCode} · Lương chuẩn:{" "}
                     {p.standardSalary ? formatCurrency(p.standardSalary) : "Chưa có lương chuẩn"}
+                    {p.description ? ` · Mô tả: ${p.description}` : ""}
                   </span>
                 </div>
                 <div className="row-actions">
                   <Badge appearance="tint" color={p.isActive ? "success" : "subtle"}>
                     {p.isActive ? "Hoạt động" : "Ngừng"}
                   </Badge>
-                  <Button size="small" onClick={() => openEditPosition(p)}>
-                    Sửa
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => (p.isActive ? setLockPosTarget(p) : togglePosition(p))}
-                  >
-                    {p.isActive ? "Khóa" : "Mở khóa"}
-                  </Button>
+                  {canManage ? (
+                    <>
+                      <Button size="small" onClick={() => openEditPosition(p)}>
+                        Sửa
+                      </Button>
+                      <Button size="small" onClick={() => openSalary(p)}>
+                        Lương chuẩn
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => (p.isActive ? setLockPosTarget(p) : togglePosition(p))}
+                      >
+                        {p.isActive ? "Khóa" : "Mở khóa"}
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -1146,6 +1391,33 @@ export function AdminPositionsPage() {
         </DialogSurface>
       </Dialog>
 
+      <Dialog open={salaryTarget !== null} onOpenChange={(_, data) => !data.open && setSalaryTarget(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Lương chuẩn: {salaryTarget?.positionName}</DialogTitle>
+            <DialogContent className="form-stack">
+              <Field label="Lương chuẩn (đ)" required>
+                <Input
+                  inputMode="numeric"
+                  value={salaryText}
+                  onChange={(_, data) => setSalaryText(data.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void submitSalary();
+                  }}
+                />
+              </Field>
+              {salaryError ? <FieldError message={salaryError} /> : null}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSalaryTarget(null)}>Huỷ</Button>
+              <Button appearance="primary" onClick={submitSalary} disabled={savingSalary}>
+                {savingSalary ? <Spinner size="tiny" /> : "Lưu"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
       <ConfirmDialog
         open={lockPosTarget !== null}
         title="Đóng chức vụ?"
@@ -1161,23 +1433,23 @@ export function AdminPositionsPage() {
 
 const UNIT_LABEL: Record<LeaveUnit, string> = { Days: "Ngày", Hours: "Giờ" };
 const PERIOD_LABEL: Record<LeaveAccrualPeriod, string> = {
-  ProratedYearly: "Cộng dồn trong năm",
-  MonthlyReset: "Cấp mỗi tháng, hết tháng reset",
+  ProratedYearly: "Cộng dồn theo tháng",
+  MonthlyReset: "Cấp mỗi tháng, hết tháng đặt lại",
   FlatYearly: "Cấp một lần mỗi năm",
 };
 // Diễn giải quy tắc cấp, khớp LeaveBalanceService.CalculateDefaultAllocation
 const PERIOD_HINT: Record<LeaveAccrualPeriod, string> = {
   ProratedYearly:
-    "Cộng dồn trong năm: cấp số lượng này cho mỗi tháng, tổng cả năm = số lượng x số tháng còn lại (nhân viên vào giữa năm chỉ tính từ tháng vào).",
-  MonthlyReset: "Cấp mỗi tháng: mỗi tháng được cấp đúng số lượng này, hết tháng thì reset, không cộng dồn.",
-  FlatYearly: "Cấp một lần mỗi năm: đầu năm cấp đúng số lượng này cho cả năm.",
+    "Số lượng là mức cấp mỗi THÁNG, cộng dồn cho các tháng còn lại trong năm (nhân viên vào giữa năm chỉ được tính từ tháng vào làm). Ví dụ 1 ngày: cả năm 12 ngày.",
+  MonthlyReset: "Mỗi tháng được cấp đúng số lượng này, hết tháng thì số dư đặt lại, không cộng dồn sang tháng sau.",
+  FlatYearly: "Mỗi năm được cấp một lần đúng số lượng này, không chia theo tháng vào làm.",
 };
 
 function describeAccrual(t: LeaveTypeDto) {
   const unit = t.accrualUnit === "Days" ? "ngày" : "giờ";
-  if (t.accrualPeriod === "ProratedYearly") return `${t.accrualAmount} ${unit}/tháng, cộng dồn trong năm`;
-  if (t.accrualPeriod === "MonthlyReset") return `${t.accrualAmount} ${unit}/tháng, hết tháng reset`;
-  return `${t.accrualAmount} ${unit}/năm, cấp một lần`;
+  if (t.accrualPeriod === "MonthlyReset") return `Cấp ${t.accrualAmount} ${unit} mỗi tháng, hết tháng đặt lại`;
+  if (t.accrualPeriod === "FlatYearly") return `Cấp ${t.accrualAmount} ${unit} một lần mỗi năm`;
+  return `Cấp ${t.accrualAmount} ${unit} mỗi tháng, cộng dồn trong năm`;
 }
 
 const emptyLeaveTypeForm = {
@@ -1192,6 +1464,8 @@ const emptyLeaveTypeForm = {
 
 export function AdminLeaveTypesPage() {
   const notify = useNotify();
+  const canManage = useCan()("leavetype.manage");
+  const [formError, setFormError] = useState("");
   const [items, setItems] = useState<LeaveTypeDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -1217,12 +1491,14 @@ export function AdminLeaveTypesPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setFormError("");
     setForm(emptyLeaveTypeForm);
     setOpen(true);
   };
 
   const openEdit = (t: LeaveTypeDto) => {
     setEditing(t);
+    setFormError("");
     setForm({
       leaveTypeCode: t.leaveTypeCode,
       leaveTypeName: t.leaveTypeName,
@@ -1236,19 +1512,19 @@ export function AdminLeaveTypesPage() {
   };
 
   const submit = async () => {
-    const amount = Number(form.accrualAmount);
-    if (!editing && !form.leaveTypeCode.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập mã loại nghỉ." });
-      return;
+    const amount = Number(form.accrualAmount.trim().replace(",", "."));
+    if (!editing) {
+      const code = form.leaveTypeCode.trim();
+      if (!code) return setFormError("Vui lòng nhập mã loại nghỉ.");
+      if (!/^[A-Z][A-Z0-9_]*$/.test(code)) {
+        return setFormError("Mã chỉ gồm chữ HOA, số, gạch dưới và bắt đầu bằng chữ cái.");
+      }
     }
-    if (!form.leaveTypeName.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập tên loại nghỉ." });
-      return;
-    }
+    if (!form.leaveTypeName.trim()) return setFormError("Vui lòng nhập tên loại nghỉ.");
     if (!form.accrualAmount.trim() || !Number.isFinite(amount) || amount <= 0) {
-      notify({ ok: false, message: "Số lượng cấp phải lớn hơn 0." });
-      return;
+      return setFormError("Số lượng cấp phải là số lớn hơn 0.");
     }
+    setFormError("");
     const body = {
       leaveTypeName: form.leaveTypeName.trim(),
       accrualAmount: amount,
@@ -1261,16 +1537,17 @@ export function AdminLeaveTypesPage() {
     try {
       if (editing) {
         await leaveTypeApi.update(editing.leaveTypeCode, body);
-        notify({ ok: true, message: "Đã cập nhật loại nghỉ phép." });
+        notify({ ok: true, message: "Đã cập nhật loại nghỉ." });
       } else {
         await leaveTypeApi.create({ ...body, leaveTypeCode: form.leaveTypeCode.trim().toUpperCase() });
-        notify({ ok: true, message: "Đã thêm loại nghỉ phép." });
+        notify({ ok: true, message: "Đã tạo loại nghỉ." });
       }
       setOpen(false);
       setEditing(null);
       load();
     } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
+      // Giữ form mở và hiện nguyên văn lỗi backend (vd đổi đơn vị khi đã có số dư).
+      setFormError(errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -1279,7 +1556,7 @@ export function AdminLeaveTypesPage() {
   const toggle = async (t: LeaveTypeDto) => {
     try {
       await leaveTypeApi.setActive(t.leaveTypeCode, !t.isActive);
-      notify({ ok: true, message: "Đã cập nhật trạng thái loại nghỉ." });
+      notify({ ok: true, message: t.isActive ? "Đã tắt loại nghỉ." : "Đã bật loại nghỉ." });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -1303,12 +1580,12 @@ export function AdminLeaveTypesPage() {
     setDeleteError("");
     try {
       await leaveTypeApi.remove(deleteTarget.leaveTypeCode);
-      notify({ ok: true, message: "Đã xoá loại nghỉ phép." });
+      notify({ ok: true, message: "Đã xoá loại nghỉ." });
       setDeleteTarget(null);
       load();
     } catch (err) {
       // Giữ dialog mở và hiện nguyên văn message backend kèm gợi ý tắt thay vì xoá
-      setDeleteError(`${errorMessage(err)} Hãy tắt loại nghỉ này thay vì xoá.`);
+      setDeleteError(`${errorMessage(err)} Bạn có thể tắt loại nghỉ thay vì xoá.`);
     } finally {
       setDeleting(false);
     }
@@ -1320,45 +1597,57 @@ export function AdminLeaveTypesPage() {
         title="Loại nghỉ phép"
         description="Tạo, sửa, bật/tắt, xoá loại nghỉ và quy tắc cấp số dư."
         action={
-          <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
-            Thêm loại nghỉ
-          </Button>
+          <div className="row-actions">
+            <ReloadButton onClick={load} />
+            {canManage ? (
+              <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
+                Thêm loại nghỉ
+              </Button>
+            ) : null}
+          </div>
         }
       />
       {loading ? (
         <Spinner label="Đang tải..." />
       ) : (
         <SectionPanel title="Danh sách loại nghỉ phép">
-          {items.length === 0 ? <EmptyState title="Chưa có loại nghỉ nào." description="Bấm Thêm loại nghỉ để tạo mới." /> : null}
+          {items.length === 0 ? <EmptyState title="Chưa có loại nghỉ phép." description="Bấm Thêm loại nghỉ để tạo mới." /> : null}
           <div className="compact-list">
             {items.map((t) => (
               <div className="compact-row" key={t.leaveTypeCode}>
                 <div>
                   <strong>{t.leaveTypeName}</strong>
                   <span>
-                    {t.leaveTypeCode} · Đơn vị: {UNIT_LABEL[t.accrualUnit]} · {describeAccrual(t)} ·{" "}
+                    Mã: {t.leaveTypeCode} · {describeAccrual(t)} · Đơn vị: {UNIT_LABEL[t.accrualUnit]} ·{" "}
                     {t.isPaid ? "Có lương" : "Không lương"}
+                    {t.description ? ` · ${t.description}` : ""}
                   </span>
                 </div>
                 <div className="row-actions">
-                  <Badge appearance="tint" color={t.isActive ? "success" : "subtle"}>
-                    {t.isActive ? "Hoạt động" : "Ngừng"}
+                  <Badge appearance="tint" color={t.isActive ? "success" : "danger"}>
+                    {t.isActive ? "Đang dùng" : "Đã tắt"}
                   </Badge>
-                  <Button size="small" onClick={() => openEdit(t)}>
-                    Sửa
-                  </Button>
-                  <Button size="small" onClick={() => (t.isActive ? setLockTarget(t) : toggle(t))}>
-                    {t.isActive ? "Tắt" : "Bật"}
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setDeleteError("");
-                      setDeleteTarget(t);
-                    }}
-                  >
-                    Xoá
-                  </Button>
+                  {canManage ? (
+                    <>
+                      <Switch
+                        checked={t.isActive}
+                        label={t.isActive ? "Bật" : "Tắt"}
+                        onChange={() => (t.isActive ? setLockTarget(t) : toggle(t))}
+                      />
+                      <Button size="small" onClick={() => openEdit(t)}>
+                        Sửa
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setDeleteError("");
+                          setDeleteTarget(t);
+                        }}
+                      >
+                        Xoá
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -1375,13 +1664,19 @@ export function AdminLeaveTypesPage() {
       >
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>{editing ? "Sửa loại nghỉ phép" : "Thêm loại nghỉ phép"}</DialogTitle>
+            <DialogTitle>{editing ? "Sửa loại nghỉ" : "Thêm loại nghỉ"}</DialogTitle>
             <DialogContent className="form-stack">
-              <Field label="Mã loại nghỉ" required>
+              <Field
+                label="Mã loại nghỉ"
+                required
+                hint={editing ? "Mã không đổi được sau khi tạo." : "VD: SICK_LEAVE"}
+              >
                 <Input
                   value={form.leaveTypeCode}
                   disabled={!!editing}
-                  onChange={(_, data) => setForm((v) => ({ ...v, leaveTypeCode: data.value.toUpperCase() }))}
+                  onChange={(_, data) =>
+                    setForm((v) => ({ ...v, leaveTypeCode: data.value.replace(/[^A-Za-z0-9_]/g, "").toUpperCase() }))
+                  }
                 />
               </Field>
               <Field label="Tên loại nghỉ" required>
@@ -1389,14 +1684,12 @@ export function AdminLeaveTypesPage() {
               </Field>
               <Field label="Số lượng cấp" required>
                 <Input
-                  type="number"
-                  min={0}
-                  step="any"
+                  inputMode="decimal"
                   value={form.accrualAmount}
                   onChange={(_, data) => setForm((v) => ({ ...v, accrualAmount: data.value }))}
                 />
               </Field>
-              <Field label="Đơn vị" required>
+              <Field label="Đơn vị">
                 <Dropdown
                   value={UNIT_LABEL[form.accrualUnit]}
                   selectedOptions={[form.accrualUnit]}
@@ -1406,7 +1699,7 @@ export function AdminLeaveTypesPage() {
                   <Option value="Hours">Giờ</Option>
                 </Dropdown>
               </Field>
-              <Field label="Chu kỳ cấp" required hint={PERIOD_HINT[form.accrualPeriod]}>
+              <Field label="Chu kỳ cấp" hint={PERIOD_HINT[form.accrualPeriod]}>
                 <Dropdown
                   value={PERIOD_LABEL[form.accrualPeriod]}
                   selectedOptions={[form.accrualPeriod]}
@@ -1421,27 +1714,26 @@ export function AdminLeaveTypesPage() {
                   ))}
                 </Dropdown>
               </Field>
-              <Field label="Có lương">
-                <Dropdown
-                  value={form.isPaid ? "Có lương" : "Không lương"}
-                  selectedOptions={[form.isPaid ? "paid" : "unpaid"]}
-                  onOptionSelect={(_, data) => setForm((v) => ({ ...v, isPaid: data.optionValue === "paid" }))}
-                >
-                  <Option value="paid">Có lương</Option>
-                  <Option value="unpaid">Không lương</Option>
-                </Dropdown>
-              </Field>
+              <Switch
+                checked={form.isPaid}
+                label="Nghỉ có lương"
+                onChange={(_, data) => setForm((v) => ({ ...v, isPaid: data.checked }))}
+              />
               <Field label="Mô tả">
                 <Textarea resize="vertical" value={form.description} onChange={(_, data) => setForm((v) => ({ ...v, description: data.value }))} />
               </Field>
               {editing ? (
-                <FieldError message="Lưu ý: thay đổi quy tắc cấp chỉ ảnh hưởng số dư tạo mới, không đổi số dư đã cấp. Chỉ đổi được đơn vị khi loại nghỉ chưa có đơn/số dư." />
+                <p>
+                  Lưu ý: sửa quy tắc cấp chỉ áp dụng cho số dư tạo MỚI, không thay đổi số dư đã cấp cho nhân viên. Chỉ
+                  đổi được đơn vị khi loại nghỉ chưa có đơn hoặc số dư.
+                </p>
               ) : null}
+              {formError ? <FieldError message={formError} /> : null}
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setOpen(false)}>Huỷ</Button>
               <Button appearance="primary" disabled={saving} onClick={submit}>
-                {editing ? "Lưu thay đổi" : "Thêm mới"}
+                {saving ? <Spinner size="tiny" /> : "Lưu"}
               </Button>
             </DialogActions>
           </DialogBody>
@@ -1450,9 +1742,9 @@ export function AdminLeaveTypesPage() {
 
       <ConfirmDialog
         open={lockTarget !== null}
-        title="Tắt loại nghỉ?"
-        description={`Loại nghỉ "${lockTarget?.leaveTypeName}" sẽ chuyển sang Ngừng hoạt động cho đến khi được bật lại.`}
-        confirmLabel="Tắt loại nghỉ"
+        title="Tắt loại nghỉ"
+        description={`Tắt "${lockTarget?.leaveTypeName}"? Nhân viên sẽ không chọn được loại nghỉ này khi xin nghỉ.`}
+        confirmLabel="Tắt"
         confirming={locking}
         onConfirm={confirmLock}
         onCancel={() => setLockTarget(null)}
@@ -1460,10 +1752,10 @@ export function AdminLeaveTypesPage() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Xoá loại nghỉ?"
+        title="Xoá loại nghỉ"
         description={
           <>
-            <div>{`Loại nghỉ "${deleteTarget?.leaveTypeName}" sẽ bị xoá vĩnh viễn.`}</div>
+            <div>{`Xoá "${deleteTarget?.leaveTypeName}" (${deleteTarget?.leaveTypeCode})? Thao tác này không hoàn tác được.`}</div>
             {deleteError ? <FieldError message={deleteError} /> : null}
           </>
         }

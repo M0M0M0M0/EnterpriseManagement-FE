@@ -16,6 +16,8 @@ export interface AuthSession {
   username: string;
   employeeCode?: string;
   roles: string[];
+  // Mã quyền của tài khoản (trả về lúc đăng nhập); phiên cũ chưa lưu thì undefined.
+  permissions?: string[];
 }
 
 export interface ChangePasswordRequest {
@@ -379,4 +381,12 @@ export interface NotificationDto {
   refId?: number | null;
   isRead: boolean;
   createdAt: string;
+}
+
+// Vị trí công ty và bán kính cho phép chấm công.
+export interface OfficeLocationDto {
+  name: string;
+  latitude: number;
+  longitude: number;
+  allowedRadiusMeters: number;
 }

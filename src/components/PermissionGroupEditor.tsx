@@ -52,6 +52,16 @@ function pagePermissionLabel(permission: PermissionDto): string {
   return scope ? `${permission.permissionName} (${scope})` : permission.permissionName;
 }
 
+// Nhãn checkbox kèm mã quyền nhỏ bên dưới (giống mobile).
+function permissionLabel(name: string, code: string) {
+  return (
+    <span className="adm-perm-label">
+      {name}
+      <small className="adm-perm-code">{code}</small>
+    </span>
+  );
+}
+
 export interface PermissionGroup {
   key: string;
   label: string;
@@ -97,7 +107,7 @@ export function PermissionGroupEditor({
   const [openItems, setOpenItems] = useState<string[]>([]);
 
   if (!groups.length) {
-    return <EmptyState title="Chưa có permission" description="Tạo permission trước khi gán cho role." />;
+    return <EmptyState title="Chưa có quyền nào." description="Tạo quyền trước khi gán cho vai trò." />;
   }
 
   const toggle = (code: string, checked: boolean) => {
@@ -148,7 +158,7 @@ export function PermissionGroupEditor({
                     {group.pagePermissions.map((permission) => (
                       <Checkbox
                         key={permission.permissionCode}
-                        label={pagePermissionLabel(permission)}
+                        label={permissionLabel(pagePermissionLabel(permission), permission.permissionCode)}
                         checked={selectedSet.has(permission.permissionCode)}
                         onChange={(_, data) => toggle(permission.permissionCode, Boolean(data.checked))}
                       />
@@ -161,7 +171,7 @@ export function PermissionGroupEditor({
                     {group.actionPermissions.map((permission) => (
                       <Checkbox
                         key={permission.permissionCode}
-                        label={permission.permissionName}
+                        label={permissionLabel(permission.permissionName, permission.permissionCode)}
                         checked={selectedSet.has(permission.permissionCode)}
                         onChange={(_, data) => toggle(permission.permissionCode, Boolean(data.checked))}
                       />

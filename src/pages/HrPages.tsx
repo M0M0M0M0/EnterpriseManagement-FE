@@ -17,11 +17,13 @@ import {
   Tooltip,
   type BadgeProps,
 } from "@fluentui/react-components";
-import { InfoRegular } from "@fluentui/react-icons";
+import { ArrowDownloadRegular, InfoRegular } from "@fluentui/react-icons";
 import { startOfMonth } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
+import { useCan } from "../hooks/useCan";
 import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
+import { ReasonDialog, RetryError } from "../components/ReviewParts";
 import { useNotify } from "../components/useNotify";
 import { departmentApi, employeeApi } from "../services/api";
 import { errorMessage } from "../services/http";
@@ -34,7 +36,7 @@ import type {
   ProcessLeaveReturnItem,
 } from "../types/attendanceHr";
 import type { AttendanceAdjustmentDto, AttendanceRecordDto, DepartmentDto, EmployeeDto } from "../types/domain";
-import { formatDate, formatDateTime, formatTime, isoDate, leaveSessionLabels } from "../utils/format";
+import { formatDate, formatDateTime, formatTime, isoDate, leaveSessionLabels, sessionNames } from "../utils/format";
 
 // ---- Nhãn/màu dùng chung cho trạng thái từng buổi (backend đã tính sẵn, client chỉ hiển thị) ----
 
@@ -84,8 +86,39 @@ function SessionCell({ status, source, note }: { status?: string; source?: strin
           <InfoRegular aria-label={sourceLabel} />
         </Tooltip>
       ) : null}
+      {note ? (
+        <small className="hr-session-note" title={note}>
+          {note}
+        </small>
+      ) : null}
     </span>
   );
+}
+
+// Xuất CSV bảng công toàn công ty đang lọc (có BOM cho Excel), cột khớp bản mobile.
+function downloadCompanyAttendanceCsv(records: AttendanceRecordDto[], startDate: string, endDate: string) {
+  const header = ["Mã NV", "Nhân viên", "Ngày", "Giờ vào", "Giờ ra", "Buổi sáng", "Buổi chiều", "Ghi chú sáng", "Ghi chú chiều"];
+  const rows = records.map((r) => [
+    r.employeeCode,
+    r.employeeName,
+    r.attendanceDate.slice(0, 10),
+    r.checkInTime ? formatTime(r.checkInTime) : "",
+    r.checkOutTime ? formatTime(r.checkOutTime) : "",
+    sessionStatusLabels[r.morningStatus ?? "None"] ?? "--",
+    sessionStatusLabels[r.afternoonStatus ?? "None"] ?? "--",
+    r.morningNote ?? "",
+    r.afternoonNote ?? "",
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\r\n");
+  const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `cham-cong-cong-ty_${startDate}_${endDate}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function monthStartIso() {
@@ -108,6 +141,8 @@ export function HrAttendancePage() {
   const [range, setRange] = useState({ startDate: monthStartIso(), endDate: isoDate() });
   const [departmentCode, setDepartmentCode] = useState("");
   const [search, setSearch] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     departmentApi
@@ -124,15 +159,16 @@ export function HrAttendancePage() {
       return;
     }
     setLoading(true);
+    setLoadError("");
     attendanceViewApi
       .getAll(range.startDate, range.endDate, departmentCode || undefined)
       .then(setRecords)
       .catch((err) => {
         setRecords([]);
-        notify({ ok: false, message: errorMessage(err) });
+        setLoadError(errorMessage(err));
       })
       .finally(() => setLoading(false));
-  }, [range.startDate, range.endDate, departmentCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [range.startDate, range.endDate, departmentCode, reloadKey]);
 
   // Tải lại im lặng bảng công (không Spinner).
   useAutoRefresh(
@@ -195,12 +231,21 @@ export function HrAttendancePage() {
           </Dropdown>
         </Field>
         <Field label="Tìm theo tên/mã">
-          <Input value={search} onChange={(_, data) => setSearch(data.value)} placeholder="Tên hoặc mã nhân viên" />
+          <Input value={search} onChange={(_, data) => setSearch(data.value)} placeholder="Tìm tên hoặc mã NV" />
         </Field>
+        <Button
+          icon={<ArrowDownloadRegular />}
+          disabled={!visible.length}
+          onClick={() => downloadCompanyAttendanceCsv(visible, range.startDate, range.endDate)}
+        >
+          Xuất CSV
+        </Button>
       </div>
       {invalidRange ? <FieldError message="Từ ngày phải trước hoặc bằng đến ngày." /> : null}
       {loading ? (
         <Spinner label="Đang tải..." />
+      ) : loadError ? (
+        <RetryError message={loadError} onRetry={() => setReloadKey((v) => v + 1)} />
       ) : visible.length ? (
         <div className="enterprise-table-wrap">
           <table className="enterprise-table">
@@ -222,6 +267,12 @@ export function HrAttendancePage() {
                     <strong>{r.employeeName}</strong>
                     <br />
                     <small>{r.employeeCode}</small>
+                    {r.leaveTypeName ? (
+                      <>
+                        <br />
+                        <small>Nghỉ phép: {r.leaveTypeName}</small>
+                      </>
+                    ) : null}
                   </td>
                   <td>{formatDate(r.attendanceDate)}</td>
                   <td>{formatTime(r.checkInTime)}</td>
@@ -239,7 +290,7 @@ export function HrAttendancePage() {
           </table>
         </div>
       ) : (
-        <EmptyState title="Không có dữ liệu" description="Chưa có bản ghi chấm công phù hợp bộ lọc." />
+        <EmptyState title="Không có dữ liệu" description="Không có bản ghi chấm công trong khoảng này." />
       )}
     </div>
   );
@@ -258,6 +309,7 @@ export function HrAttendanceNotesPage() {
   const [filterEmployee, setFilterEmployee] = useState("");
   const [revokeTarget, setRevokeTarget] = useState<AttendanceNoteDto | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const [listError, setListError] = useState("");
 
   const [form, setForm] = useState({
     employeeCode: "",
@@ -274,9 +326,10 @@ export function HrAttendanceNotesPage() {
   const isMultiDay = form.startDate !== form.endDate;
 
   useEffect(() => {
+    // Người đã nghỉ việc (Terminated) không còn để ghi nhận chấm công.
     employeeApi
       .getAll()
-      .then(setEmployees)
+      .then((list) => setEmployees(list.filter((e) => e.employmentStatus.toLowerCase() !== "terminated")))
       .catch((err) => notify({ ok: false, message: errorMessage(err) }));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -287,12 +340,13 @@ export function HrAttendanceNotesPage() {
       return;
     }
     setLoading(true);
+    setListError("");
     attendanceNoteApi
       .list(range.from, range.to, filterEmployee || undefined)
       .then(setNotes)
       .catch((err) => {
         setNotes([]);
-        notify({ ok: false, message: errorMessage(err) });
+        setListError(errorMessage(err));
       })
       .finally(() => setLoading(false));
   }, [range.from, range.to, filterEmployee]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -322,11 +376,12 @@ export function HrAttendanceNotesPage() {
     if (!form.employeeCode) return setFormError("Vui lòng chọn nhân viên.");
     if (!form.startDate || !form.endDate) return setFormError("Vui lòng chọn từ ngày và đến ngày.");
     if (form.startDate > form.endDate) return setFormError("Từ ngày phải trước hoặc bằng đến ngày.");
-    if (!form.note.trim()) return setFormError("Vui lòng nhập nội dung ghi chú.");
+    if (form.endDate > isoDate()) return setFormError("Chỉ ghi nhận được đến hết ngày hôm nay.");
+    if (!form.note.trim()) return setFormError("Vui lòng nhập ghi chú.");
     setFormError("");
     setSending(true);
     try {
-      const created = await attendanceNoteApi.create({
+      await attendanceNoteApi.create({
         employeeCode: form.employeeCode,
         startDate: form.startDate,
         endDate: form.endDate,
@@ -334,7 +389,7 @@ export function HrAttendanceNotesPage() {
         status: form.status,
         note: form.note.trim(),
       });
-      notify({ ok: true, message: `Đã ghi nhận ${created.length} buổi.` });
+      notify({ ok: true, message: "Đã ghi nhận chấm công." });
       setForm((v) => ({ ...v, note: "" }));
       loadNotes();
     } catch (err) {
@@ -391,6 +446,7 @@ export function HrAttendanceNotesPage() {
             <Field label="Từ ngày" required>
               <Input
                 type="date"
+                max={isoDate()}
                 value={form.startDate}
                 onChange={(_, data) => setForm((v) => ({ ...v, startDate: data.value }))}
               />
@@ -398,6 +454,7 @@ export function HrAttendanceNotesPage() {
             <Field label="Đến ngày" required>
               <Input
                 type="date"
+                max={isoDate()}
                 value={form.endDate}
                 onChange={(_, data) => setForm((v) => ({ ...v, endDate: data.value }))}
               />
@@ -429,7 +486,7 @@ export function HrAttendanceNotesPage() {
               <Option value="Absent">{noteStatusLabels.Absent}</Option>
             </Dropdown>
           </Field>
-          <Field label="Nội dung ghi chú" required>
+          <Field label="Ghi chú (bắt buộc)" required>
             <Textarea
               resize="vertical"
               value={form.note}
@@ -470,6 +527,8 @@ export function HrAttendanceNotesPage() {
         </div>
         {loading ? (
           <Spinner label="Đang tải..." />
+        ) : listError ? (
+          <RetryError message={listError} onRetry={loadNotes} />
         ) : notes.length ? (
           <div className="enterprise-table-wrap">
             <table className="enterprise-table">
@@ -493,7 +552,7 @@ export function HrAttendanceNotesPage() {
                       <small>{n.employeeCode}</small>
                     </td>
                     <td>{formatDate(n.date)}</td>
-                    <td>{leaveSessionLabels[n.session]}</td>
+                    <td>{sessionNames[n.session]}</td>
                     <td>
                       <SessionBadge status={n.status} />
                     </td>
@@ -514,7 +573,7 @@ export function HrAttendanceNotesPage() {
             </table>
           </div>
         ) : (
-          <EmptyState title="Chưa có ghi chú" description="Không có ghi chú nào đang hiệu lực trong khoảng đã chọn." />
+          <EmptyState title="Chưa có ghi chú" description="Chưa có ghi chú nào trong khoảng này." />
         )}
       </SectionPanel>
 
@@ -523,7 +582,7 @@ export function HrAttendanceNotesPage() {
         title="Thu hồi ghi chú"
         description={
           revokeTarget
-            ? `Thu hồi ghi chú ${leaveSessionLabels[revokeTarget.session]} ngày ${formatDate(revokeTarget.date)} của ${revokeTarget.employeeName}?`
+            ? `Thu hồi ghi chú ${sessionNames[revokeTarget.session]} ngày ${formatDate(revokeTarget.date)} của ${revokeTarget.employeeName}?`
             : ""
         }
         confirmLabel="Thu hồi"
@@ -536,86 +595,31 @@ export function HrAttendanceNotesPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Hộp thoại nhập lý do từ chối (dùng chung cho điều chỉnh công và đi làm lại)
-// ---------------------------------------------------------------------------
-
-function HrRejectDialog({
-  open,
-  title,
-  sending,
-  onSubmit,
-  onCancel,
-}: {
-  open: boolean;
-  title: string;
-  sending: boolean;
-  onSubmit: (reason: string) => void;
-  onCancel: () => void;
-}) {
-  const [reason, setReason] = useState("");
-  const [error, setError] = useState("");
-
-  // Mỗi lần mở lại thì xoá lý do cũ.
-  useEffect(() => {
-    if (open) {
-      setReason("");
-      setError("");
-    }
-  }, [open]);
-
-  const submit = () => {
-    if (!reason.trim()) return setError("Vui lòng nhập lý do từ chối.");
-    onSubmit(reason.trim());
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(_, data) => !data.open && onCancel()}>
-      <DialogSurface>
-        <DialogBody>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogContent className="form-stack">
-            <Field label="Lý do từ chối" required>
-              <Textarea resize="vertical" value={reason} onChange={(_, data) => setReason(data.value)} />
-            </Field>
-            <FieldError message={error} />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={onCancel} disabled={sending}>
-              Huỷ
-            </Button>
-            <Button appearance="primary" onClick={submit} disabled={sending}>
-              {sending ? <Spinner size="tiny" /> : "Từ chối"}
-            </Button>
-          </DialogActions>
-        </DialogBody>
-      </DialogSurface>
-    </Dialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // 3. Xử lý điều chỉnh công
 // ---------------------------------------------------------------------------
 
 export function HrAdjustmentsPage() {
   const notify = useNotify();
+  const canApply = useCan()("attendance.adjustment.apply");
   const [items, setItems] = useState<AttendanceAdjustmentDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [applyTarget, setApplyTarget] = useState<AttendanceAdjustmentDto | null>(null);
   const [rejectTarget, setRejectTarget] = useState<AttendanceAdjustmentDto | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError("");
     adjustmentProcessingApi
       .getPending()
       .then(setItems)
       .catch((err) => {
         setItems([]);
-        notify({ ok: false, message: errorMessage(err) });
+        setLoadError(errorMessage(err));
       })
       .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(load, [load]);
 
@@ -626,7 +630,7 @@ export function HrAdjustmentsPage() {
     setBusy(true);
     try {
       await adjustmentProcessingApi.apply(applyTarget.id);
-      notify({ ok: true, message: "Đã áp dụng điều chỉnh công." });
+      notify({ ok: true, message: "Đã áp dụng điều chỉnh." });
       setApplyTarget(null);
       load();
     } catch (err) {
@@ -640,7 +644,7 @@ export function HrAdjustmentsPage() {
     if (!rejectTarget) return;
     setBusy(true);
     try {
-      await adjustmentProcessingApi.reject(rejectTarget.id, reason);
+      await adjustmentProcessingApi.reject(rejectTarget.id, reason || undefined);
       notify({ ok: true, message: "Đã từ chối yêu cầu." });
       setRejectTarget(null);
       load();
@@ -657,44 +661,60 @@ export function HrAdjustmentsPage() {
         title="Xử lý điều chỉnh công"
         description="Các yêu cầu điều chỉnh công đã được quản lý duyệt, chờ áp dụng."
       />
-      {loading ? (
+      {loading && !items.length ? (
         <Spinner label="Đang tải..." />
+      ) : loadError && !items.length ? (
+        <RetryError message={loadError} onRetry={load} />
       ) : items.length ? (
         <div className="review-list">
           {items.map((item) => (
             <article key={item.id} className="review-content">
               <div>
-                <strong>{item.employeeName}</strong> <span>{formatDate(item.attendanceDate)}</span>
-                <p>{item.reason}</p>
-                <small>
-                  Giờ vào: {formatTime(item.oldCheckInTime)} → {formatTime(item.newCheckInTime)} · Giờ ra:{" "}
-                  {formatTime(item.oldCheckOutTime)} → {formatTime(item.newCheckOutTime)}
-                </small>
-                <br />
-                <small>
-                  quản lý duyệt: {item.approverName ?? "--"}
-                  {item.approvedAt ? ` (${formatDateTime(item.approvedAt)})` : ""}
-                </small>
+                <strong>
+                  {item.employeeName} ({item.employeeCode})
+                </strong>{" "}
+                <span>{formatDate(item.attendanceDate)}</span>
+                {item.newCheckInTime ? (
+                  <small>
+                    Giờ vào: {formatTime(item.oldCheckInTime)} → {formatTime(item.newCheckInTime)}
+                  </small>
+                ) : null}
+                {item.newCheckOutTime ? (
+                  <small>
+                    Giờ ra: {formatTime(item.oldCheckOutTime)} → {formatTime(item.newCheckOutTime)}
+                  </small>
+                ) : null}
+                <p>Lý do: {item.reason}</p>
+                {item.approverName ? (
+                  <small>
+                    Quản lý duyệt: {item.approverName}
+                    {item.approvedAt ? ` · ${formatDateTime(item.approvedAt)}` : ""}
+                  </small>
+                ) : null}
               </div>
-              <div className="table-actions">
-                <Button appearance="primary" onClick={() => setApplyTarget(item)}>
-                  Áp dụng
-                </Button>
-                <Button onClick={() => setRejectTarget(item)}>Từ chối</Button>
-              </div>
+              {canApply ? (
+                <div className="table-actions">
+                  <Button appearance="primary" disabled={busy} onClick={() => setApplyTarget(item)}>
+                    Áp dụng
+                  </Button>
+                  <Button disabled={busy} onClick={() => setRejectTarget(item)}>
+                    Từ chối
+                  </Button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>
       ) : (
-        <EmptyState title="Không có yêu cầu" description="Hiện không có yêu cầu điều chỉnh công nào chờ xử lý." />
+        <EmptyState title="Không có yêu cầu" description="Không có yêu cầu nào chờ xử lý." />
       )}
 
       <ConfirmDialog
         open={!!applyTarget}
-        title="Áp dụng điều chỉnh công"
+        title="Áp dụng điều chỉnh"
         description={
           applyTarget
-            ? `Áp dụng đúng giờ đề xuất (vào ${formatTime(applyTarget.newCheckInTime)}, ra ${formatTime(applyTarget.newCheckOutTime)}) cho ${applyTarget.employeeName} ngày ${formatDate(applyTarget.attendanceDate)}?`
+            ? `Áp dụng đúng giờ đề xuất cho ${applyTarget.employeeName} ngày ${formatDate(applyTarget.attendanceDate)}?`
             : ""
         }
         confirmLabel="Áp dụng"
@@ -702,10 +722,12 @@ export function HrAdjustmentsPage() {
         onConfirm={apply}
         onCancel={() => setApplyTarget(null)}
       />
-      <HrRejectDialog
+      <ReasonDialog
         open={!!rejectTarget}
-        title="Từ chối điều chỉnh công"
-        sending={busy}
+        title={rejectTarget ? `Từ chối yêu cầu của ${rejectTarget.employeeName}` : "Từ chối yêu cầu"}
+        label="Lý do"
+        confirmLabel="Từ chối"
+        busy={busy}
         onSubmit={reject}
         onCancel={() => setRejectTarget(null)}
       />
@@ -717,19 +739,15 @@ export function HrAdjustmentsPage() {
 // 4. Xử lý đi làm lại
 // ---------------------------------------------------------------------------
 
-const returnStateLabels: Record<string, string> = {
-  Pending: "Chờ quản lý",
-  AwaitingHr: "Chờ xác nhận",
-  Active: "Đã có hiệu lực",
-  Rejected: "Từ chối",
-};
-
 const sessionKey = (date: string, session: DaySession) => `${date}|${session}`;
 
 export function HrLeaveReturnsPage() {
   const notify = useNotify();
+  const canProcess = useCan()("attendance.note.manage");
   const [items, setItems] = useState<LeaveReturnRequestDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const [target, setTarget] = useState<LeaveReturnRequestDto | null>(null);
   // Trạng thái chọn cho từng buổi AwaitingHr; mặc định Đúng giờ.
   const [choices, setChoices] = useState<Record<string, "OnTime" | "Late">>({});
@@ -739,15 +757,16 @@ export function HrLeaveReturnsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError("");
     leaveReturnApi
       .getAwaitingProcessing()
       .then(setItems)
       .catch((err) => {
         setItems([]);
-        notify({ ok: false, message: errorMessage(err) });
+        setLoadError(errorMessage(err));
       })
       .finally(() => setLoading(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(load, [load]);
 
@@ -764,6 +783,7 @@ export function HrLeaveReturnsPage() {
   const closeDialog = () => {
     setTarget(null);
     setRejecting(false);
+    setConfirming(false);
   };
 
   const awaiting = target?.sessions.filter((s) => s.state === "AwaitingHr") ?? [];
@@ -780,11 +800,12 @@ export function HrLeaveReturnsPage() {
     setDialogError("");
     try {
       await leaveReturnApi.process(target.id, { items: body });
-      notify({ ok: true, message: "Đã xác nhận nhân viên đi làm." });
+      notify({ ok: true, message: "Đã xác nhận đi làm lại." });
       closeDialog();
       load();
     } catch (err) {
       setDialogError(errorMessage(err));
+      setConfirming(false);
     } finally {
       setBusy(false);
     }
@@ -794,8 +815,8 @@ export function HrLeaveReturnsPage() {
     if (!target) return;
     setBusy(true);
     try {
-      await leaveReturnApi.rejectProcessing(target.id, reason);
-      notify({ ok: true, message: "Đã từ chối yêu cầu đi làm lại." });
+      await leaveReturnApi.rejectProcessing(target.id, reason || undefined);
+      notify({ ok: true, message: "Đã từ chối yêu cầu." });
       closeDialog();
       load();
     } catch (err) {
@@ -811,24 +832,26 @@ export function HrLeaveReturnsPage() {
         title="Xử lý đi làm lại"
         description="Xác nhận các buổi nhân viên đã đi làm lại trong thời gian nghỉ phép."
       />
-      {loading ? (
+      {loading && !items.length ? (
         <Spinner label="Đang tải..." />
+      ) : loadError && !items.length ? (
+        <RetryError message={loadError} onRetry={load} />
       ) : items.length ? (
         <div className="review-list">
           {items.map((item) => (
             <article key={item.id} className="review-content">
               <div>
-                <strong>{item.employeeName}</strong>{" "}
+                <strong>
+                  {item.employeeName} ({item.employeeCode})
+                </strong>{" "}
+                <Badge appearance="tint" shape="rounded" color="informative">
+                  Chờ xác nhận
+                </Badge>
                 <span>
-                  Từ {formatDate(item.fromDate)} · {leaveSessionLabels[item.fromSession]}
+                  Đi làm lại từ {sessionNames[item.fromSession].toLowerCase()} {formatDate(item.fromDate)}
                 </span>
+                <small>{item.sessions.filter((s) => s.state === "AwaitingHr").length} buổi chờ xác nhận</small>
                 <p>{item.reason}</p>
-                <small>
-                  quản lý duyệt: {item.managerName ?? "--"}
-                  {item.managerApprovedAt ? ` (${formatDateTime(item.managerApprovedAt)})` : ""}
-                  {" · "}
-                  {item.sessions.filter((s) => s.state === "AwaitingHr").length} buổi chờ xác nhận
-                </small>
               </div>
               <div className="table-actions">
                 <Button appearance="primary" onClick={() => openDialog(item)}>
@@ -839,15 +862,28 @@ export function HrLeaveReturnsPage() {
           ))}
         </div>
       ) : (
-        <EmptyState title="Không có yêu cầu" description="Hiện không có yêu cầu đi làm lại nào chờ xác nhận." />
+        <EmptyState title="Không có yêu cầu" description="Không có yêu cầu đi làm lại nào chờ xác nhận." />
       )}
 
       <Dialog open={!!target && !rejecting} onOpenChange={(_, data) => !data.open && closeDialog()}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Xử lý đi làm lại{target ? ` - ${target.employeeName}` : ""}</DialogTitle>
+            <DialogTitle>Xử lý đi làm lại{target ? ` - ${target.employeeName} (${target.employeeCode})` : ""}</DialogTitle>
             <DialogContent className="form-stack">
-              {target ? <p>{target.reason}</p> : null}
+              {target ? (
+                <>
+                  <p>
+                    Đi làm lại từ {sessionNames[target.fromSession].toLowerCase()} {formatDate(target.fromDate)}
+                  </p>
+                  <p>Lý do: {target.reason}</p>
+                  {target.managerName ? (
+                    <small>
+                      Quản lý duyệt: {target.managerName}
+                      {target.managerApprovedAt ? ` · ${formatDateTime(target.managerApprovedAt)}` : ""}
+                    </small>
+                  ) : null}
+                </>
+              ) : null}
               <strong>Các buổi chờ xác nhận</strong>
               {awaiting.length ? (
                 awaiting.map((s) => {
@@ -856,7 +892,7 @@ export function HrLeaveReturnsPage() {
                   return (
                     <Field
                       key={key}
-                      label={`${formatDate(s.date)} · ${leaveSessionLabels[s.session]} · ${s.leaveTypeName}`}
+                      label={`${formatDate(s.date)} · ${sessionNames[s.session]} · ${s.leaveTypeName}`}
                     >
                       <Dropdown
                         value={sessionStatusLabels[value]}
@@ -876,13 +912,12 @@ export function HrLeaveReturnsPage() {
               )}
               {active.length ? (
                 <>
-                  <strong>Đã có hiệu lực (chỉ tham khảo)</strong>
+                  <strong>Các buổi đã có hiệu lực</strong>
                   <ul>
                     {active.map((s) => (
                       <li key={sessionKey(s.date, s.session)}>
-                        {formatDate(s.date)} · {leaveSessionLabels[s.session]} · {s.leaveTypeName} ·{" "}
-                        {returnStateLabels[s.state]}
-                        {s.workedStatus ? ` (${sessionStatusLabels[s.workedStatus]})` : ""}
+                        {formatDate(s.date)} · {sessionNames[s.session]} · {s.leaveTypeName}
+                        {s.workedStatus ? ` · ${sessionStatusLabels[s.workedStatus]}` : ""}
                       </li>
                     ))}
                   </ul>
@@ -894,21 +929,36 @@ export function HrLeaveReturnsPage() {
               <Button onClick={closeDialog} disabled={busy}>
                 Đóng
               </Button>
-              <Button onClick={() => setRejecting(true)} disabled={busy}>
-                Từ chối
-              </Button>
-              <Button appearance="primary" onClick={confirm} disabled={busy || !awaiting.length}>
-                {busy ? <Spinner size="tiny" /> : "Xác nhận đã đi làm"}
-              </Button>
+              {canProcess ? (
+                <>
+                  <Button onClick={() => setRejecting(true)} disabled={busy}>
+                    Từ chối
+                  </Button>
+                  <Button appearance="primary" onClick={() => setConfirming(true)} disabled={busy || !awaiting.length}>
+                    {busy ? <Spinner size="tiny" /> : "Xác nhận đã đi làm"}
+                  </Button>
+                </>
+              ) : null}
             </DialogActions>
           </DialogBody>
         </DialogSurface>
       </Dialog>
 
-      <HrRejectDialog
+      <ConfirmDialog
+        open={!!target && confirming}
+        title="Xác nhận đã đi làm"
+        description={`Xác nhận ${target?.employeeName ?? ""} đã đi làm lại các buổi chờ xác nhận?`}
+        confirmLabel="Xác nhận"
+        confirming={busy}
+        onConfirm={confirm}
+        onCancel={() => setConfirming(false)}
+      />
+      <ReasonDialog
         open={!!target && rejecting}
-        title="Từ chối yêu cầu đi làm lại"
-        sending={busy}
+        title={target ? `Từ chối yêu cầu của ${target.employeeName}` : "Từ chối yêu cầu"}
+        label="Lý do"
+        confirmLabel="Từ chối"
+        busy={busy}
         onSubmit={reject}
         onCancel={() => setRejecting(false)}
       />
