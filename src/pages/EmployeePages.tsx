@@ -19,6 +19,7 @@ import {
   CalendarRegular,
 } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import {
   AdjustmentBadge,
   AttendanceBadge,
@@ -95,6 +96,12 @@ export function EmployeeDashboardPage() {
 
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Tải lại im lặng khi có thông báo liên quan (không Spinner, không toast lỗi).
+  useAutoRefresh(
+    () => (employeeCode ? dashboardApi.employee(employeeCode).then(setData).catch(() => undefined) : undefined),
+    { types: ["AttendanceChanged", "LeaveApproved", "LeaveRejected", "LeaveSubmitted", "ReturnApproved", "ReturnRejected", "AdjustmentApplied", "AdjustmentManagerApproved", "AdjustmentRejected", "AttendanceNoteCreated"] },
+  );
+
   if (!employeeCode)
     return (
       <EmptyState
@@ -168,6 +175,20 @@ export function EmployeeAttendancePage() {
   };
 
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tải lại im lặng; dialog/form đang nhập không bị ảnh hưởng. Lịch & PunchHero tự làm mới qua hook riêng.
+  useAutoRefresh(
+    () =>
+      employeeCode
+        ? Promise.all([attendanceApi.getHistory(employeeCode), attendanceApi.getMyAdjustments()])
+            .then(([h, a]) => {
+              setHistory(h);
+              setAdjustments(a);
+            })
+            .catch(() => undefined)
+        : undefined,
+    { types: ["AttendanceChanged", "AdjustmentApplied", "AdjustmentManagerApproved", "AdjustmentRejected", "AttendanceNoteCreated", "LeaveApproved", "ReturnApproved"] },
+  );
 
   // Mở form yêu cầu, đặt sẵn ngày cần chỉnh sửa.
   const openDialog = (date: Date) => {
@@ -404,6 +425,25 @@ export function EmployeeLeavePage() {
   };
 
   useEffect(load, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tải lại im lặng: chỉ đổi dữ liệu nền, không đụng tới form đang nhập.
+  useAutoRefresh(
+    () =>
+      employeeCode
+        ? Promise.all([
+            leaveRequestApi.getMine(),
+            leaveBalanceApi.getByEmployee(employeeCode, new Date().getFullYear()),
+            leaveReturnApi.getMine().catch(() => [] as LeaveReturnRequestDto[]),
+          ])
+            .then(([r, b, rt]) => {
+              setRequests(r);
+              setBalances(b);
+              setReturns(rt);
+            })
+            .catch(() => undefined)
+        : undefined,
+    { types: ["LeaveApproved", "LeaveRejected", "ReturnApproved", "ReturnRejected", "LeaveSubmitted"] },
+  );
 
   const selectedType = leaveTypes.find((t) => t.leaveTypeCode === form.leaveTypeCode);
   const isShortLeave = selectedType?.accrualPeriod === "MonthlyReset";

@@ -3,6 +3,7 @@ import { ChevronDownRegular, ChevronLeftRegular, ChevronRightRegular, EditRegula
 import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { attendanceViewApi } from "../services/hrApi";
 import { errorMessage } from "../services/http";
 import type { AttendanceCalendarDayDto, SessionStatus } from "../types/attendanceHr";
@@ -153,16 +154,23 @@ export function AttendanceMonthCalendar({
   const loadMonth = useCallback(
     (month: Date, force = false) => {
       const key = monthKey(month);
-      if (!force && cache[key]) return;
-      setLoading(true);
-      setError("");
+      // Tháng đã có cache thì hiện ngay và tải lại nền (không Spinner).
+      const cached = Boolean(cache[key]) && !force;
+      if (!cached) {
+        setLoading(true);
+        setError("");
+      }
       attendanceViewApi
         .getCalendar(employeeCode, dayKey(startOfMonth(month)), dayKey(endOfMonth(month)))
         .then((days) =>
           setCache((prev) => ({ ...prev, [key]: Object.fromEntries(days.map((d) => [d.date.slice(0, 10), d])) })),
         )
-        .catch((err) => setError(errorMessage(err, "Không tải được lịch chấm công.")))
-        .finally(() => setLoading(false));
+        .catch((err) => {
+          if (!cached) setError(errorMessage(err, "Không tải được lịch chấm công."));
+        })
+        .finally(() => {
+          if (!cached) setLoading(false);
+        });
     },
     [employeeCode, cache],
   );
@@ -170,6 +178,21 @@ export function AttendanceMonthCalendar({
   useEffect(() => {
     loadMonth(focusedMonth);
   }, [focusedMonth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tải lại im lặng tháng đang xem (không Spinner, giữ ngày đang chọn).
+  useAutoRefresh(
+    () =>
+      attendanceViewApi
+        .getCalendar(employeeCode, dayKey(startOfMonth(focusedMonth)), dayKey(endOfMonth(focusedMonth)))
+        .then((days) =>
+          setCache((prev) => ({
+            ...prev,
+            [monthKey(focusedMonth)]: Object.fromEntries(days.map((d) => [d.date.slice(0, 10), d])),
+          })),
+        )
+        .catch(() => undefined),
+    { types: ["AttendanceChanged", "AdjustmentApplied", "AdjustmentManagerApproved", "AdjustmentRejected", "AttendanceNoteCreated", "LeaveApproved", "ReturnApproved"] },
+  );
 
   const cells = useMemo(() => {
     const days = eachDayOfInterval({ start: startOfMonth(focusedMonth), end: endOfMonth(focusedMonth) });

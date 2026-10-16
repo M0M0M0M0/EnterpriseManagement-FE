@@ -59,8 +59,7 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/manager/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
   ],
   admin: [
-    { to: "/admin/users", label: "Tài khoản", icon: <ShieldRegular />, end: true },
-    { to: "/admin/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
+    { to: "/admin/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular />, end: true },
     { to: "/admin/departments", label: "Phòng ban", icon: <BuildingRegular /> },
     { to: "/admin/positions", label: "Chức vụ", icon: <PersonRegular /> },
     { to: "/admin/audit", label: "Nhật ký hệ thống", icon: <HistoryRegular /> },
@@ -143,7 +142,8 @@ export function AppShell() {
 
   const dynamicNavItems: NavItem[] | null =
     menuStatus === "loaded" && menus
-      ? [...menus]
+      ? menus
+          .filter((menu) => menu.route !== "/admin/users") // menu "Tài khoản" cũ đã gộp vào Quản lý nhân viên
           .sort((a, b) => a.displayOrder - b.displayOrder)
           .map((menu, index) => ({
             to: menu.route,

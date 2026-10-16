@@ -28,7 +28,7 @@ export interface EmployeeDto {
   firstName: string;
   lastName: string;
   fullName: string;
-  email?: string;
+  email: string;
   phone?: string;
   address?: string;
   dateOfBirth?: string;
@@ -41,12 +41,21 @@ export interface EmployeeDto {
   managerName?: string;
   employmentStatus: string;
   hireDate: string;
+  // Tài khoản đăng nhập gắn với hồ sơ (quan hệ 1-1).
+  username: string;
+  roleCodes: string[];
+  roleNames: string[];
+  isAccountActive: boolean;
+  lastLoginAt?: string;
 }
 
 export interface CreateEmployeeRequest {
   firstName: string;
   lastName: string;
-  email?: string;
+  username: string;
+  email: string;
+  // Bỏ trống thì backend lấy theo chức vụ (mặc định EMPLOYEE).
+  roleCode?: string;
   phone?: string;
   address?: string;
   dateOfBirth?: string;
@@ -57,9 +66,16 @@ export interface CreateEmployeeRequest {
   hireDate: string;
 }
 
+export interface CreateEmployeeResult {
+  employee: EmployeeDto;
+  generatedPassword: string;
+}
+
 export interface UpdateEmployeeRequest {
   firstName: string;
   lastName: string;
+  email?: string;
+  roleCodes?: string[];
   phone?: string;
   address?: string;
   departmentCode: string;
@@ -104,6 +120,8 @@ export interface PositionDto {
   description?: string;
   isActive: boolean;
   standardSalary?: number;
+  // Vai trò mặc định của chức vụ (nếu backend trả).
+  roleCode?: string;
 }
 
 export interface CreatePositionRequest {
@@ -248,33 +266,8 @@ export interface ManagerDashboardDto {
   teamAbsentTodayCount: number;
 }
 
-export interface UserDto {
+export interface ResetPasswordResult {
   username: string;
-  email: string;
-  employeeCode?: string;
-  employeeName?: string;
-  roles: string[];
-  isActive: boolean;
-  lastLoginAt?: string;
-}
-
-export interface CreateUserRequest {
-  username: string;
-  email: string;
-  // Bắt buộc chọn tay — chức vụ chỉ là chức danh hiển thị, không còn tự suy ra role.
-  roleCode?: string;
-  employeeCode?: string;
-}
-
-export interface UpdateUserRequest {
-  email?: string;
-  employeeCode?: string;
-  roleCodes?: string[];
-  isActive?: boolean;
-}
-
-export interface CreateUserResult {
-  user: UserDto;
   generatedPassword: string;
 }
 

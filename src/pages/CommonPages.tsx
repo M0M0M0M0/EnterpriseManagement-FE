@@ -107,6 +107,8 @@ export function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<UpdateEmployeeRequest>({
+    firstName: "",
+    lastName: "",
     phone: "",
     address: "",
     departmentCode: "",
@@ -125,6 +127,8 @@ export function ProfilePage() {
       .then((data) => {
         setEmployee(data);
         setForm({
+          firstName: data.firstName,
+          lastName: data.lastName,
           phone: data.phone ?? "",
           address: data.address ?? "",
           departmentCode: data.departmentCode,
@@ -214,8 +218,16 @@ export function ProfilePage() {
         <SectionPanel title="Thông tin cá nhân">
           <dl className="detail-list">
             <div>
+              <dt>Tên đăng nhập</dt>
+              <dd>{employee.username || session.username}</dd>
+            </div>
+            <div>
+              <dt>Vai trò</dt>
+              <dd>{employee.roleNames?.length ? employee.roleNames.join(", ") : session.roles.join(", ")}</dd>
+            </div>
+            <div>
               <dt>Email</dt>
-              <dd>{employee.email ?? "--"}</dd>
+              <dd>{employee.email || "--"}</dd>
             </div>
             <div>
               <dt>Điện thoại</dt>

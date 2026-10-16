@@ -20,6 +20,7 @@ import {
 import { InfoRegular } from "@fluentui/react-icons";
 import { startOfMonth } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
 import { departmentApi, employeeApi } from "../services/api";
@@ -132,6 +133,18 @@ export function HrAttendancePage() {
       })
       .finally(() => setLoading(false));
   }, [range.startDate, range.endDate, departmentCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tải lại im lặng bảng công (không Spinner).
+  useAutoRefresh(
+    () =>
+      range.startDate && range.endDate && range.startDate <= range.endDate
+        ? attendanceViewApi
+            .getAll(range.startDate, range.endDate, departmentCode || undefined)
+            .then(setRecords)
+            .catch(() => undefined)
+        : undefined,
+    { types: ["AdjustmentManagerApproved", "ReturnApproved", "ReturnSubmitted", "AdjustmentApplied", "AdjustmentRejected", "AttendanceNoteCreated"] },
+  );
 
   const keyword = search.trim().toLowerCase();
   const visible = useMemo(
@@ -285,6 +298,17 @@ export function HrAttendanceNotesPage() {
   }, [range.from, range.to, filterEmployee]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(loadNotes, [loadNotes]);
+
+  useAutoRefresh(
+    () =>
+      range.from && range.to && range.from <= range.to
+        ? attendanceNoteApi
+            .list(range.from, range.to, filterEmployee || undefined)
+            .then(setNotes)
+            .catch(() => undefined)
+        : undefined,
+    { types: ["AdjustmentManagerApproved", "ReturnApproved", "ReturnSubmitted", "AdjustmentApplied", "AdjustmentRejected", "AttendanceNoteCreated"] },
+  );
 
   const selectedEmployee = employees.find((e) => e.employeeCode === form.employeeCode);
   const keyword = employeeQuery.trim().toLowerCase();
@@ -595,6 +619,8 @@ export function HrAdjustmentsPage() {
 
   useEffect(load, [load]);
 
+  useAutoRefresh(() => adjustmentProcessingApi.getPending().then(setItems).catch(() => undefined), { types: ["AdjustmentManagerApproved", "ReturnApproved", "ReturnSubmitted", "AdjustmentApplied", "AdjustmentRejected", "AttendanceNoteCreated"] });
+
   const apply = async () => {
     if (!applyTarget) return;
     setBusy(true);
@@ -724,6 +750,8 @@ export function HrLeaveReturnsPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(load, [load]);
+
+  useAutoRefresh(() => leaveReturnApi.getAwaitingProcessing().then(setItems).catch(() => undefined), { types: ["AdjustmentManagerApproved", "ReturnApproved", "ReturnSubmitted", "AdjustmentApplied", "AdjustmentRejected", "AttendanceNoteCreated"] });
 
   const openDialog = (item: LeaveReturnRequestDto) => {
     const initial: Record<string, "OnTime" | "Late"> = {};

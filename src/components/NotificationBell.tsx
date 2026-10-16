@@ -4,9 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { errorMessage } from "../services/http";
 import { notificationApi } from "../services/api";
+import { startLiveUpdates, subscribeLive, useLiveState } from "../store/useLiveUpdates";
+import { useAuthStore } from "../store/useAuthStore";
 import type { NotificationDto } from "../types/domain";
+import { useNotify } from "./useNotify";
 
-const POLL_MS = 30_000;
+// Nhắc chấm công thì không toast cho đỡ ồn.
+const SILENT_TYPES = new Set(["CheckInReminder", "CheckOutReminder"]);
 
 function timeAgo(iso: string) {
   const diff = Math.max(0, Date.now() - new Date(iso).getTime());
@@ -24,7 +28,10 @@ function timeAgo(iso: string) {
 export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
+  const unread = useLiveState((state) => state.unread);
+  const setUnread = useLiveState((state) => state.setUnread);
+  const token = useAuthStore((state) => state.session?.token);
+  const notify = useNotify();
   const [items, setItems] = useState<NotificationDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -35,7 +42,7 @@ export function NotificationBell() {
     } catch {
       // Lỗi tạm thời (mất mạng...) thì giữ số cũ, lần sau thử lại.
     }
-  }, []);
+  }, [setUnread]);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -49,11 +56,23 @@ export function NotificationBell() {
     }
   }, []);
 
+  // Bộ poll duy nhất của ứng dụng: chạy khi đã đăng nhập, cập nhật số chưa đọc và phát toast.
   useEffect(() => {
-    refreshCount();
-    const timer = window.setInterval(refreshCount, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [refreshCount]);
+    if (!token) return;
+    const stop = startLiveUpdates();
+    const unsubscribe = subscribeLive((event) => {
+      if (!SILENT_TYPES.has(event.type)) notify({ ok: true, message: event.title });
+    });
+    return () => {
+      unsubscribe();
+      stop();
+    };
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Khi mở danh sách thì làm tươi lại số chưa đọc.
+  useEffect(() => {
+    if (open) refreshCount();
+  }, [open, refreshCount]);
 
   useEffect(() => {
     if (open) loadList();

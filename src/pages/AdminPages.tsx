@@ -36,51 +36,56 @@ import type {
   LeaveUnit,
   PositionDto,
   RoleDto,
-  UserDto,
 } from "../types/domain";
 import { formatCurrency, formatDate, formatDateTime } from "../utils/format";
 
 const NO_MANAGER = "__none__";
+const DEFAULT_ROLE = "__default__";
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const EMPLOYMENT_STATUS_LABEL: Record<string, string> = {
+  Active: "Đang làm việc",
+  Probation: "Thử việc",
+  OnLeave: "Đang nghỉ phép",
+  Resigned: "Đã nghỉ việc",
+  Terminated: "Đã nghỉ việc",
+  Inactive: "Đã nghỉ việc",
+};
+
+// Người còn làm việc (kể cả thử việc, đang nghỉ phép); chỉ Resigned/Terminated/Inactive mới là đã nghỉ.
+const isWorking = (status: string) => !["Resigned", "Terminated", "Inactive"].includes(status);
+
+type Credential = { username: string; password: string; isReset: boolean };
+type PendingAction =
+  | { kind: "resign"; employee: EmployeeDto }
+  | { kind: "lock"; employee: EmployeeDto }
+  | { kind: "reset"; employee: EmployeeDto };
 
 export function AdminEmployeesPage() {
   const notify = useNotify();
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [positions, setPositions] = useState<PositionDto[]>([]);
+  const [roles, setRoles] = useState<RoleDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<EmployeeDto | null>(null);
   const [sending, setSending] = useState(false);
+  const [formError, setFormError] = useState("");
   const [managerQuery, setManagerQuery] = useState("");
-
-  // Tài khoản đăng nhập gắn theo mã nhân viên — chỉ để biết hồ sơ nào đã có tài khoản,
-  // quyết định hiện nút "Tạo tài khoản" hay "Quản lý tài khoản". Muốn tạo thêm tài khoản
-  // thứ 2 cho cùng 1 nhân viên thì phải vào thẳng trang Users tạo thủ công, trang này chỉ
-  // hỗ trợ tạo nhanh khi nhân viên chưa có tài khoản nào.
-  const [usersByEmployee, setUsersByEmployee] = useState<Record<string, UserDto[]>>({});
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [accountEmployee, setAccountEmployee] = useState<EmployeeDto | null>(null);
-  const [accountForm, setAccountForm] = useState({ username: "", email: "" });
-  const [accountSending, setAccountSending] = useState(false);
-  const [roles, setRoles] = useState<RoleDto[]>([]);
-  const [accountRole, setAccountRole] = useState("");
-  const [rolesLoading, setRolesLoading] = useState(false);
-  const [rolesError, setRolesError] = useState("");
-  const [manageOpen, setManageOpen] = useState(false);
-  const [manageEmployee, setManageEmployee] = useState<EmployeeDto | null>(null);
-  const [togglingUsername, setTogglingUsername] = useState<string | null>(null);
-  const [resettingUsername, setResettingUsername] = useState<string | null>(null);
-  const [credential, setCredential] = useState<{ username: string; password: string } | null>(null);
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [credential, setCredential] = useState<Credential | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [lockEmployeeTarget, setLockEmployeeTarget] = useState<EmployeeDto | null>(null);
-  const [lockingEmployee, setLockingEmployee] = useState(false);
-  const [lockAccountTarget, setLockAccountTarget] = useState<UserDto | null>(null);
-  const [lockingAccount, setLockingAccount] = useState(false);
 
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
+    username: "",
     email: "",
+    roleCode: DEFAULT_ROLE,
+    roleCodes: [] as string[],
     phone: "",
     address: "",
     dateOfBirth: "",
@@ -91,13 +96,17 @@ export function AdminEmployeesPage() {
     hireDate: formatDate(new Date().toISOString(), "yyyy-MM-dd"),
   });
 
+  const activeRoles = roles.filter((r) => r.isActive);
+  const roleName = (code: string) => roles.find((r) => r.roleCode === code)?.roleName ?? code;
+
   const load = () => {
     setLoading(true);
-    Promise.all([employeeApi.getAll(), departmentApi.getAll(), positionApi.getAll()])
-      .then(([e, d, p]) => {
+    Promise.all([employeeApi.getAll(), departmentApi.getAll(), positionApi.getAll(), roleApi.getAll()])
+      .then(([e, d, p, r]) => {
         setEmployees(e);
         setDepartments(d);
         setPositions(p);
+        setRoles(r);
         setForm((v) => ({
           ...v,
           departmentCode: v.departmentCode || d[0]?.departmentCode || "",
@@ -108,33 +117,28 @@ export function AdminEmployeesPage() {
       .finally(() => setLoading(false));
   };
 
-  const loadUsers = () => {
-    userApi
-      .getAll()
-      .then((list) => {
-        const map: Record<string, UserDto[]> = {};
-        for (const user of list) {
-          if (!user.employeeCode) continue;
-          (map[user.employeeCode] ??= []).push(user);
-        }
-        setUsersByEmployee(map);
-      })
-      .catch(() => setUsersByEmployee({}));
-  };
-
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(loadUsers, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const managerLabel = (e: EmployeeDto) => `${e.fullName} (${e.employeeCode})`;
+
+  // Vai trò mặc định theo chức vụ nếu backend cho biết; không thì để backend tự chọn.
+  const defaultRoleFor = (positionCode: string) => {
+    const code = positions.find((p) => p.positionCode === positionCode)?.roleCode;
+    return code && activeRoles.some((r) => r.roleCode === code) ? code : DEFAULT_ROLE;
+  };
 
   const openCreate = () => {
     setEditing(null);
     setManagerQuery("");
+    setFormError("");
     setForm((v) => ({
       ...v,
       firstName: "",
       lastName: "",
+      username: "",
       email: "",
+      roleCode: defaultRoleFor(v.positionCode),
+      roleCodes: [],
       phone: "",
       address: "",
       dateOfBirth: "",
@@ -147,12 +151,15 @@ export function AdminEmployeesPage() {
 
   const openEdit = (employee: EmployeeDto) => {
     setEditing(employee);
+    setFormError("");
     const currentManager = employees.find((e) => e.employeeCode === employee.managerCode);
     setManagerQuery(currentManager ? managerLabel(currentManager) : "");
     setForm((v) => ({
       ...v,
       firstName: employee.firstName,
       lastName: employee.lastName,
+      email: employee.email ?? "",
+      roleCodes: employee.roleCodes ?? [],
       phone: employee.phone ?? "",
       address: employee.address ?? "",
       departmentCode: employee.departmentCode,
@@ -174,7 +181,7 @@ export function AdminEmployeesPage() {
   };
 
   const selectPosition = (positionCode: string) => {
-    setForm((v) => ({ ...v, positionCode }));
+    setForm((v) => ({ ...v, positionCode, roleCode: editing ? v.roleCode : defaultRoleFor(positionCode) }));
   };
 
   const handleManagerSelect = (optionValue: string | undefined) => {
@@ -188,21 +195,39 @@ export function AdminEmployeesPage() {
     setManagerQuery(emp ? managerLabel(emp) : "");
   };
 
+  const showCredential = (username: string, password: string, isReset: boolean) => {
+    setShowPassword(false);
+    setCredential({ username, password, isReset });
+  };
+
+  const validate = (): string => {
+    if (!form.departmentCode || !form.positionCode) return "Vui lòng chọn phòng ban và chức vụ.";
+    if (!form.firstName.trim() || !form.lastName.trim()) return "Vui lòng nhập đủ họ tên.";
+    if (!EMAIL_PATTERN.test(form.email.trim())) return "Email không đúng định dạng.";
+    if (editing) return form.roleCodes.length ? "" : "Nhân viên phải có ít nhất một vai trò.";
+    if (!USERNAME_PATTERN.test(form.username.trim())) {
+      return "Tên đăng nhập dài 3-50 ký tự, chỉ gồm chữ không dấu, số, dấu chấm, gạch dưới và gạch ngang.";
+    }
+    return "";
+  };
+
   const submit = async () => {
-    if (!form.departmentCode || !form.positionCode) {
-      notify({ ok: false, message: "Vui lòng chọn phòng ban và chức vụ." });
+    const invalid = validate();
+    if (invalid) {
+      setFormError(invalid);
       return;
     }
-    if (!form.firstName.trim() || !form.lastName.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập đủ họ tên." });
-      return;
-    }
+    const email = form.email.trim();
+    const username = form.username.trim();
+    setFormError("");
     setSending(true);
     try {
       if (editing) {
         await employeeApi.update(editing.employeeCode, {
           firstName: form.firstName,
           lastName: form.lastName,
+          email,
+          roleCodes: form.roleCodes,
           phone: form.phone || undefined,
           address: form.address || undefined,
           departmentCode: form.departmentCode,
@@ -210,108 +235,32 @@ export function AdminEmployeesPage() {
           managerCode: form.managerCode || undefined,
         });
         notify({ ok: true, message: "Đã cập nhật hồ sơ nhân viên." });
+        setOpen(false);
       } else {
-        await employeeApi.create({
-          ...form,
-          email: form.email || undefined,
+        const result = await employeeApi.create({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          username,
+          email,
+          roleCode: form.roleCode === DEFAULT_ROLE ? undefined : form.roleCode,
           phone: form.phone || undefined,
           address: form.address || undefined,
           dateOfBirth: form.dateOfBirth || undefined,
+          gender: form.gender,
+          departmentCode: form.departmentCode,
+          positionCode: form.positionCode,
           managerCode: form.managerCode || undefined,
+          hireDate: form.hireDate,
         });
-        notify({ ok: true, message: "Đã thêm nhân viên mới." });
+        notify({ ok: true, message: "Đã thêm nhân viên và tạo tài khoản đăng nhập." });
+        setOpen(false);
+        showCredential(result.employee.username || username, result.generatedPassword, false);
       }
-      setOpen(false);
       load();
     } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
+      setFormError(errorMessage(err));
     } finally {
       setSending(false);
-    }
-  };
-
-  const toggleActive = async (employee: EmployeeDto) => {
-    try {
-      const deactivating = employee.employmentStatus === "Active";
-      await employeeApi.setActive(employee.employeeCode, !deactivating);
-      notify({
-        ok: true,
-        message: deactivating
-          ? "Đã cho nghỉ việc và khoá các tài khoản liên quan"
-          : "Đã phục hồi hồ sơ. Tài khoản đăng nhập vẫn đang khoá, hãy mở khoá ở màn Quản lý tài khoản nếu cần.",
-      });
-      load();
-      loadUsers();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    }
-  };
-
-  // Cho nghỉ việc là hành động có rủi ro (khóa truy cập, ảnh hưởng chấm công/nghỉ phép của
-  // nhân viên) nên cần xác nhận trước — phục hồi lại thì bấm là chạy luôn.
-  const confirmLockEmployee = async () => {
-    if (!lockEmployeeTarget) return;
-    setLockingEmployee(true);
-    try {
-      await toggleActive(lockEmployeeTarget);
-      setLockEmployeeTarget(null);
-    } finally {
-      setLockingEmployee(false);
-    }
-  };
-
-  const openCreateAccount = (employee: EmployeeDto) => {
-    setAccountEmployee(employee);
-    setAccountForm({ username: employee.employeeCode.toLowerCase(), email: employee.email ?? "" });
-    setShowPassword(false);
-    setAccountRole("");
-    setRolesError("");
-    setRolesLoading(true);
-    setAccountOpen(true);
-    roleApi
-      .getAll()
-      .then((list) => setRoles(list.filter((r) => r.isActive)))
-      .catch((err) => setRolesError(errorMessage(err)))
-      .finally(() => setRolesLoading(false));
-  };
-
-  const submitAccount = async () => {
-    if (!accountEmployee) return;
-    const username = accountForm.username.trim();
-    const email = accountForm.email.trim();
-    if (!username || !email) {
-      notify({ ok: false, message: "Vui lòng nhập đủ tên đăng nhập và email." });
-      return;
-    }
-    if (!/^[A-Za-z0-9._-]{3,50}$/.test(username)) {
-      notify({ ok: false, message: "Tên đăng nhập gồm 3-50 ký tự: chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang." });
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      notify({ ok: false, message: "Email không đúng định dạng." });
-      return;
-    }
-    if (!accountRole) {
-      notify({ ok: false, message: "Vui lòng chọn vai trò cho tài khoản này." });
-      return;
-    }
-    setAccountSending(true);
-    try {
-      const result = await userApi.create({
-        username,
-        email,
-        roleCode: accountRole,
-        employeeCode: accountEmployee.employeeCode,
-      });
-      setShowPassword(false);
-      setCredential({ username: result.user.username, password: result.generatedPassword });
-      notify({ ok: true, message: "Đã tạo tài khoản." });
-      setAccountOpen(false);
-      loadUsers();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setAccountSending(false);
     }
   };
 
@@ -325,54 +274,88 @@ export function AdminEmployeesPage() {
     }
   };
 
-  const openManageAccounts = (employee: EmployeeDto) => {
-    setManageEmployee(employee);
-    setManageOpen(true);
-  };
-
-  const toggleAccountActive = async (user: UserDto) => {
-    setTogglingUsername(user.username);
+  const runPending = async () => {
+    if (!pending) return;
+    const { kind, employee } = pending;
+    setConfirming(true);
     try {
-      await userApi.setActive(user.username, !user.isActive);
-      notify({ ok: true, message: user.isActive ? "Đã khóa tài khoản." : "Đã mở khóa tài khoản." });
-      loadUsers();
+      if (kind === "reset") {
+        const result = await userApi.resetPassword(employee.username);
+        showCredential(result.username, result.generatedPassword, true);
+        notify({ ok: true, message: "Đã đặt lại mật khẩu." });
+      } else if (kind === "lock") {
+        await userApi.setActive(employee.username, !employee.isAccountActive);
+        notify({ ok: true, message: employee.isAccountActive ? "Đã khoá tài khoản." : "Đã mở khoá tài khoản." });
+      } else {
+        const resigning = isWorking(employee.employmentStatus);
+        await employeeApi.setActive(employee.employeeCode, !resigning);
+        notify({
+          ok: true,
+          message: resigning
+            ? "Đã cho nghỉ việc, tài khoản đăng nhập cũng đã bị khoá."
+            : "Đã phục hồi nhân viên, tài khoản đăng nhập đã được mở lại.",
+        });
+      }
+      setPending(null);
+      load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
+      setPending(null);
     } finally {
-      setTogglingUsername(null);
+      setConfirming(false);
     }
   };
 
-  const confirmLockAccount = async () => {
-    if (!lockAccountTarget) return;
-    setLockingAccount(true);
-    try {
-      await toggleAccountActive(lockAccountTarget);
-      setLockAccountTarget(null);
-    } finally {
-      setLockingAccount(false);
+  // Mở khoá tài khoản không rủi ro nên chạy luôn; khoá/nghỉ việc/đặt lại mật khẩu cần xác nhận.
+  const toggleAccount = async (employee: EmployeeDto) => {
+    if (employee.isAccountActive) {
+      setPending({ kind: "lock", employee });
+      return;
     }
-  };
-
-  const resetAccountPassword = async (user: UserDto) => {
-    setResettingUsername(user.username);
     try {
-      const result = await userApi.resetPassword(user.username);
-      setShowPassword(false);
-      setCredential({ username: result.user.username, password: result.generatedPassword });
-      notify({ ok: true, message: "Đã đặt lại mật khẩu." });
+      await userApi.setActive(employee.username, true);
+      notify({ ok: true, message: "Đã mở khoá tài khoản." });
+      load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
-    } finally {
-      setResettingUsername(null);
     }
   };
 
-  // Ứng viên quản lý: cùng phòng ban đã chọn, chưa nghỉ việc, không phải chính mình.
+  const pendingText = (() => {
+    if (!pending) return { title: "", description: "", label: "" };
+    const { kind, employee } = pending;
+    if (kind === "reset") {
+      return {
+        title: "Đặt lại mật khẩu?",
+        description: `Mật khẩu hiện tại của "${employee.username}" sẽ bị thay bằng một mật khẩu mới do hệ thống sinh ra.`,
+        label: "Đặt lại mật khẩu",
+      };
+    }
+    if (kind === "lock") {
+      return {
+        title: "Khoá tài khoản?",
+        description: `Tài khoản "${employee.username}" sẽ không thể đăng nhập cho đến khi được mở khoá lại. Trạng thái làm việc của nhân viên không đổi.`,
+        label: "Khoá tài khoản",
+      };
+    }
+    return isWorking(employee.employmentStatus)
+      ? {
+          title: "Cho nhân viên nghỉ việc?",
+          description: `Nhân viên "${employee.fullName}" sẽ chuyển sang trạng thái đã nghỉ việc, không thể chấm công/xin nghỉ nữa và tài khoản đăng nhập cũng bị khoá cho đến khi được phục hồi.`,
+          label: "Cho nghỉ việc",
+        }
+      : {
+          title: "Phục hồi nhân viên?",
+          description: `Nhân viên "${employee.fullName}" sẽ quay lại trạng thái đang làm việc và tài khoản đăng nhập cũng được mở lại.`,
+          label: "Phục hồi",
+        };
+  })();
+
+  // Ứng viên quản lý: cùng phòng ban đã chọn, còn làm việc, không phải chính mình.
   const departmentManagerCandidates = employees.filter(
     (e) =>
       e.departmentCode === form.departmentCode &&
-      e.employmentStatus !== "Terminated" &&
+      isWorking(e.employmentStatus) &&
       e.employeeCode !== editing?.employeeCode,
   );
 
@@ -393,11 +376,17 @@ export function AdminEmployeesPage() {
       )
     : managerCandidates;
 
+  // Vai trò đang gán nhưng đã bị khoá vẫn hiện trong ô chọn để không mất khi lưu.
+  const editableRoles = [
+    ...activeRoles,
+    ...roles.filter((r) => !r.isActive && form.roleCodes.includes(r.roleCode)),
+  ];
+
   return (
     <div className="page-stack">
       <PageHeader
         title="Quản lý nhân viên"
-        description="Tạo nhân viên mới, sửa phòng ban/chức vụ/quản lý, khóa/mở tài khoản làm việc."
+        description="Hồ sơ và tài khoản đăng nhập của nhân viên: tạo mới, sửa, đặt lại mật khẩu, khoá/mở tài khoản, cho nghỉ việc."
         action={
           <Button appearance="primary" icon={<AddRegular />} onClick={openCreate}>
             Thêm nhân viên
@@ -413,10 +402,13 @@ export function AdminEmployeesPage() {
               <tr>
                 <th>Mã NV</th>
                 <th>Họ tên</th>
+                <th>Tên đăng nhập</th>
+                <th>Vai trò</th>
                 <th>Phòng ban</th>
                 <th>Chức vụ</th>
-                <th>Quản lý</th>
-                <th>Trạng thái</th>
+                <th>Trạng thái làm việc</th>
+                <th>Tài khoản</th>
+                <th>Đăng nhập cuối</th>
                 <th />
               </tr>
             </thead>
@@ -425,36 +417,35 @@ export function AdminEmployeesPage() {
                 <tr key={e.employeeCode}>
                   <td>{e.employeeCode}</td>
                   <td>{e.fullName}</td>
+                  <td>{e.username}</td>
+                  <td>{e.roleNames?.join(", ") || "--"}</td>
                   <td>{e.departmentName}</td>
                   <td>{e.positionName}</td>
-                  <td>{employees.find((m) => m.employeeCode === e.managerCode)?.fullName ?? e.managerCode ?? "--"}</td>
                   <td>
-                    <Badge appearance="tint" color={e.employmentStatus === "Active" ? "success" : "subtle"}>
-                      {e.employmentStatus}
+                    <Badge appearance="tint" color={isWorking(e.employmentStatus) ? "success" : "subtle"}>
+                      {EMPLOYMENT_STATUS_LABEL[e.employmentStatus] ?? e.employmentStatus}
                     </Badge>
                   </td>
+                  <td>
+                    <Badge appearance="tint" color={e.isAccountActive ? "success" : "danger"}>
+                      {e.isAccountActive ? "Hoạt động" : "Đã khoá"}
+                    </Badge>
+                  </td>
+                  <td>{e.lastLoginAt ? formatDateTime(e.lastLoginAt) : "--"}</td>
                   <td>
                     <div className="row-actions">
                       <Button size="small" onClick={() => openEdit(e)}>
                         Sửa
                       </Button>
-                      <Button
-                        size="small"
-                        onClick={() =>
-                          e.employmentStatus === "Active" ? setLockEmployeeTarget(e) : toggleActive(e)
-                        }
-                      >
-                        {e.employmentStatus === "Active" ? "Khóa" : "Mở khóa"}
+                      <Button size="small" onClick={() => setPending({ kind: "reset", employee: e })}>
+                        Đặt lại mật khẩu
                       </Button>
-                      {usersByEmployee[e.employeeCode]?.length ? (
-                        <Button size="small" onClick={() => openManageAccounts(e)}>
-                          Quản lý tài khoản
-                        </Button>
-                      ) : (
-                        <Button size="small" onClick={() => openCreateAccount(e)}>
-                          Tạo tài khoản
-                        </Button>
-                      )}
+                      <Button size="small" onClick={() => toggleAccount(e)}>
+                        {e.isAccountActive ? "Khoá tài khoản" : "Mở tài khoản"}
+                      </Button>
+                      <Button size="small" onClick={() => setPending({ kind: "resign", employee: e })}>
+                        {isWorking(e.employmentStatus) ? "Cho nghỉ việc" : "Phục hồi"}
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -466,39 +457,50 @@ export function AdminEmployeesPage() {
         <EmptyState title="Chưa có nhân viên" description="Thêm nhân viên đầu tiên cho hệ thống." />
       )}
 
-      {credential ? (
-        <SectionPanel
-          title="Thông tin đăng nhập"
-          action={
-            <Button icon={<CopyRegular />} onClick={copyCredential}>
-              Sao chép
-            </Button>
-          }
-        >
-          <p>Gửi thông tin đăng nhập dưới đây cho nhân viên. Mật khẩu chỉ hiển thị một lần.</p>
-          <dl className="detail-list">
-            <div>
-              <dt>Tên đăng nhập</dt>
-              <dd>{credential.username}</dd>
-            </div>
-            <div>
-              <dt>Mật khẩu tạm</dt>
-              <dd className="credential-password-row">
-                <strong className="credential-password">
-                  {showPassword ? credential.password : "•".repeat(credential.password.length)}
-                </strong>
-                <Button
-                  appearance="subtle"
-                  size="small"
-                  icon={showPassword ? <EyeOffRegular /> : <EyeRegular />}
-                  aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                  onClick={() => setShowPassword((v) => !v)}
-                />
-              </dd>
-            </div>
-          </dl>
-        </SectionPanel>
-      ) : null}
+      <Dialog open={credential !== null} onOpenChange={(_, data) => !data.open && setCredential(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{credential?.isReset ? "Mật khẩu mới" : "Tài khoản đã được tạo"}</DialogTitle>
+            <DialogContent className="form-stack">
+              <p>
+                Gửi thông tin đăng nhập dưới đây cho nhân viên. Mật khẩu chỉ hiển thị một lần, đóng hộp thoại sẽ không
+                xem lại được.
+              </p>
+              {credential ? (
+                <dl className="detail-list">
+                  <div>
+                    <dt>Tên đăng nhập</dt>
+                    <dd>{credential.username}</dd>
+                  </div>
+                  <div>
+                    <dt>Mật khẩu</dt>
+                    <dd className="credential-password-row">
+                      <strong className="credential-password">
+                        {showPassword ? credential.password : "•".repeat(credential.password.length)}
+                      </strong>
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={showPassword ? <EyeOffRegular /> : <EyeRegular />}
+                        aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                        onClick={() => setShowPassword((v) => !v)}
+                      />
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button icon={<CopyRegular />} onClick={copyCredential}>
+                Sao chép
+              </Button>
+              <Button appearance="primary" onClick={() => setCredential(null)}>
+                Đóng
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
         <DialogSurface>
@@ -513,11 +515,6 @@ export function AdminEmployeesPage() {
                   <Input value={form.firstName} onChange={(_, data) => setForm((v) => ({ ...v, firstName: data.value }))} />
                 </Field>
               </div>
-              {!editing ? (
-                <Field label="Email">
-                  <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
-                </Field>
-              ) : null}
               <div className="form-grid">
                 <Field label="Điện thoại">
                   <Input value={form.phone} onChange={(_, data) => setForm((v) => ({ ...v, phone: data.value }))} />
@@ -533,7 +530,7 @@ export function AdminEmployeesPage() {
                   </Field>
                   <Field label="Giới tính">
                     <Dropdown
-                      value={form.gender}
+                      value={{ Male: "Nam", Female: "Nữ", Other: "Khác" }[form.gender] ?? form.gender}
                       selectedOptions={[form.gender]}
                       onOptionSelect={(_, data) => setForm((v) => ({ ...v, gender: data.optionValue ?? "Male" }))}
                     >
@@ -602,6 +599,58 @@ export function AdminEmployeesPage() {
                   </Field>
                 ) : null}
               </div>
+
+              <h4 className="form-section-title">Tài khoản</h4>
+              <div className="form-grid">
+                <Field
+                  label="Tên đăng nhập"
+                  required={!editing}
+                  hint={editing ? undefined : "3-50 ký tự: chữ không dấu, số, ., _, -"}
+                >
+                  <Input
+                    value={editing ? editing.username : form.username}
+                    disabled={Boolean(editing)}
+                    onChange={(_, data) => setForm((v) => ({ ...v, username: data.value }))}
+                  />
+                </Field>
+                <Field label="Email" required>
+                  <Input value={form.email} onChange={(_, data) => setForm((v) => ({ ...v, email: data.value }))} />
+                </Field>
+              </div>
+              {editing ? (
+                <Field label="Vai trò" required hint="Chọn ít nhất một vai trò.">
+                  <Dropdown
+                    multiselect
+                    value={form.roleCodes.map(roleName).join(", ")}
+                    selectedOptions={form.roleCodes}
+                    onOptionSelect={(_, data) => setForm((v) => ({ ...v, roleCodes: data.selectedOptions }))}
+                  >
+                    {editableRoles.map((r) => (
+                      <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
+                        {r.roleName}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                </Field>
+              ) : (
+                <Field label="Vai trò" hint="Mặc định theo chức vụ, có thể đổi.">
+                  <Dropdown
+                    value={form.roleCode === DEFAULT_ROLE ? "Theo chức vụ" : roleName(form.roleCode)}
+                    selectedOptions={[form.roleCode]}
+                    onOptionSelect={(_, data) => setForm((v) => ({ ...v, roleCode: data.optionValue ?? DEFAULT_ROLE }))}
+                  >
+                    <Option value={DEFAULT_ROLE} text="Theo chức vụ">
+                      Theo chức vụ
+                    </Option>
+                    {activeRoles.map((r) => (
+                      <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
+                        {r.roleName}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                </Field>
+              )}
+              {formError ? <FieldError message={formError} /> : null}
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setOpen(false)}>Huỷ</Button>
@@ -613,141 +662,14 @@ export function AdminEmployeesPage() {
         </DialogSurface>
       </Dialog>
 
-      <Dialog open={accountOpen} onOpenChange={(_, data) => setAccountOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Tạo tài khoản cho {accountEmployee?.fullName}</DialogTitle>
-            <DialogContent className="form-stack">
-              <div className="form-grid">
-                <Field label="Tên đăng nhập" required>
-                  <Input
-                    value={accountForm.username}
-                    onChange={(_, data) => setAccountForm((v) => ({ ...v, username: data.value }))}
-                  />
-                </Field>
-                <Field label="Email" required>
-                  <Input
-                    value={accountForm.email}
-                    onChange={(_, data) => setAccountForm((v) => ({ ...v, email: data.value }))}
-                  />
-                </Field>
-              </div>
-              <Field label="Vai trò" required>
-                <Dropdown
-                  placeholder={rolesLoading ? "Đang tải vai trò..." : "Chọn vai trò"}
-                  disabled={rolesLoading}
-                  value={roles.find((r) => r.roleCode === accountRole)?.roleName ?? ""}
-                  selectedOptions={accountRole ? [accountRole] : []}
-                  onOptionSelect={(_, data) => setAccountRole(data.optionValue ?? "")}
-                >
-                  {roles.map((r) => (
-                    <Option key={r.roleCode} value={r.roleCode} text={r.roleName}>
-                      {r.roleName}
-                    </Option>
-                  ))}
-                </Dropdown>
-                {rolesError ? <FieldError message={rolesError} /> : null}
-              </Field>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setAccountOpen(false)}>Huỷ</Button>
-              <Button appearance="primary" onClick={submitAccount} disabled={accountSending}>
-                {accountSending ? <Spinner size="tiny" /> : "Tạo tài khoản"}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-
-      <Dialog open={manageOpen} onOpenChange={(_, data) => setManageOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Tài khoản của {manageEmployee?.fullName}</DialogTitle>
-            <DialogContent className="form-stack">
-              <div className="enterprise-table-wrap">
-                <table className="enterprise-table">
-                  <thead>
-                    <tr>
-                      <th>Tên đăng nhập</th>
-                      <th>Email</th>
-                      <th>Vai trò</th>
-                      <th>Đăng nhập gần nhất</th>
-                      <th>Trạng thái</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(manageEmployee ? usersByEmployee[manageEmployee.employeeCode] ?? [] : []).map((user) => (
-                      <tr key={user.username}>
-                        <td>{user.username}</td>
-                        <td>{user.email}</td>
-                        <td>{user.roles.join(", ")}</td>
-                        <td>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : "--"}</td>
-                        <td>
-                          <Badge appearance="tint" color={user.isActive ? "success" : "danger"}>
-                            {user.isActive ? "Đang hoạt động" : "Đã khóa"}
-                          </Badge>
-                        </td>
-                        <td>
-                          <div className="table-actions">
-                            <Button
-                              size="small"
-                              disabled={togglingUsername === user.username}
-                              onClick={() =>
-                                user.isActive ? setLockAccountTarget(user) : toggleAccountActive(user)
-                              }
-                            >
-                              {togglingUsername === user.username ? (
-                                <Spinner size="tiny" />
-                              ) : user.isActive ? (
-                                "Khóa"
-                              ) : (
-                                "Mở khóa"
-                              )}
-                            </Button>
-                            <Button
-                              size="small"
-                              disabled={resettingUsername === user.username}
-                              onClick={() => resetAccountPassword(user)}
-                            >
-                              {resettingUsername === user.username ? <Spinner size="tiny" /> : "Đặt lại mật khẩu"}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="field-hint">
-                Muốn tạo thêm tài khoản thứ 2 cho nhân viên này? Vào trang Users để tạo thủ công.
-              </p>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setManageOpen(false)}>Đóng</Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-
       <ConfirmDialog
-        open={lockEmployeeTarget !== null}
-        title="Cho nhân viên nghỉ việc?"
-        description={`Nhân viên "${lockEmployeeTarget?.fullName}" sẽ chuyển sang trạng thái Ngừng, không thể chấm công/xin nghỉ nữa cho đến khi được phục hồi lại. Các tài khoản đăng nhập của nhân viên này cũng sẽ bị khoá.`}
-        confirmLabel="Cho nghỉ việc"
-        confirming={lockingEmployee}
-        onConfirm={confirmLockEmployee}
-        onCancel={() => setLockEmployeeTarget(null)}
-      />
-
-      <ConfirmDialog
-        open={lockAccountTarget !== null}
-        title="Khóa tài khoản?"
-        description={`Tài khoản "${lockAccountTarget?.username}" sẽ không thể đăng nhập cho đến khi được mở khóa lại.`}
-        confirmLabel="Khóa tài khoản"
-        confirming={lockingAccount}
-        onConfirm={confirmLockAccount}
-        onCancel={() => setLockAccountTarget(null)}
+        open={pending !== null}
+        title={pendingText.title}
+        description={pendingText.description}
+        confirmLabel={pendingText.label}
+        confirming={confirming}
+        onConfirm={runPending}
+        onCancel={() => setPending(null)}
       />
     </div>
   );

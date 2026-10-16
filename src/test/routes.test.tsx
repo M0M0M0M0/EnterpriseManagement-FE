@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { appTheme } from "../app/theme";
 import { useAuthStore } from "../store/useAuthStore";
+import { useMenuStore } from "../store/useMenuStore";
 
 function renderApp(path: string) {
   return render(
@@ -43,19 +44,23 @@ function mockApi() {
         return json({
           token: `${body.username}-token`,
           username: body.username,
-          employeeCode: body.username === "admin" ? undefined : body.username?.toUpperCase(),
+          employeeCode: body.username?.toUpperCase(),
           roles: rolesByUser[body.username ?? ""] ?? ["EMPLOYEE"],
         });
       }
-      if (url.endsWith("/api/users")) {
-        return json([
-          {
-            username: "admin",
-            email: "admin@ems.local",
-            roles: ["ADMIN"],
-            isActive: true,
-          },
-        ]);
+      if (url.endsWith("/api/menus/mine")) {
+        const auth = new Headers(init?.headers).get("Authorization") ?? "";
+        const menu = (menuCode: string, menuName: string, route: string, displayOrder: number) => ({
+          menuCode, menuName, route, displayOrder, permissions: [], isVisible: true, isActive: true,
+        });
+        return json(
+          auth.includes("admin")
+            ? [
+                menu("ADMIN_EMPLOYEES", "Quản lý nhân viên", "/admin/employees", 1),
+                menu("ADMIN_SYSTEM", "Quản trị hệ thống", "/admin/system", 2),
+              ]
+            : [],
+        );
       }
       if (url.endsWith("/api/roles") || url.endsWith("/api/permissions")) {
         return json({ message: "Chưa khả dụng." }, 501);
@@ -68,6 +73,7 @@ function mockApi() {
 describe("xác thực và phân quyền", () => {
   beforeEach(() => {
     useAuthStore.setState({ session: null, role: null });
+    useMenuStore.getState().reset();
     mockApi();
   });
 
@@ -76,25 +82,36 @@ describe("xác thực và phân quyền", () => {
     expect(screen.getByRole("heading", { name: /đăng nhập/i })).toBeInTheDocument();
   });
 
-  it("chặn nhân viên truy cập route Admin", () => {
+  it("chặn nhân viên truy cập route Admin", async () => {
     useAuthStore.setState({
       session: { token: "t", username: "employee", employeeCode: "EMPLOYEE", roles: ["EMPLOYEE"] },
       role: "employee",
     });
     renderApp("/admin/employees");
-    expect(screen.getByRole("heading", { name: /không có quyền truy cập/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /không có quyền truy cập/i })).toBeInTheDocument();
   });
 
-  it("admin đăng nhập qua public login và thấy Users nhưng không thấy Payroll trong sidebar", async () => {
+  it("admin đăng nhập qua public login và thấy Quản lý nhân viên nhưng không thấy Payroll trong sidebar", async () => {
     const user = userEvent.setup();
     renderApp("/login");
     await user.type(screen.getByLabelText(/tên đăng nhập/i), "admin");
     await user.type(screen.getByLabelText(/mật khẩu/i), "123456");
     await user.click(screen.getByRole("button", { name: /đăng nhập/i }));
-    expect(await screen.findByRole("heading", { name: /quản lý user \/ role \/ permission/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /quản lý nhân viên/i })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: /điều hướng chính/i });
-    expect(within(nav).getByRole("link", { name: /system administration/i })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: /quản trị hệ thống/i })).toBeInTheDocument();
     expect(within(nav).queryByRole("link", { name: /bảng lương|payroll/i })).not.toBeInTheDocument();
+  });
+
+  it("chuyển /admin/users sang Quản lý nhân viên và không còn mục Tài khoản", async () => {
+    useAuthStore.setState({
+      session: { token: "admin-token", username: "admin", employeeCode: "ADMIN", roles: ["ADMIN"] },
+      role: "admin",
+    });
+    renderApp("/admin/users");
+    expect(await screen.findByRole("heading", { name: /quản lý nhân viên/i })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: /điều hướng chính/i });
+    expect(within(nav).queryByRole("link", { name: /^tài khoản$/i })).not.toBeInTheDocument();
   });
 
   it("hiển thị trang không tìm thấy cho đường dẫn không hợp lệ", () => {

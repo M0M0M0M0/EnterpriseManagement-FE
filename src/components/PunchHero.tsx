@@ -3,6 +3,8 @@ import { FingerprintRegular, SignOutRegular } from "@fluentui/react-icons";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useCallback, useEffect, useState } from "react";
+import { emitLocal, LOCAL_ATTENDANCE_CHANGED } from "../store/useLiveUpdates";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { attendanceApi } from "../services/api";
 import { attendanceViewApi } from "../services/hrApi";
 import { errorMessage } from "../services/http";
@@ -68,6 +70,18 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
 
   useEffect(load, [load]);
 
+  // Tải lại im lặng trạng thái hôm nay (vd. HR sửa công).
+  useAutoRefresh(
+    () => {
+      const today = isoDate();
+      return attendanceViewApi
+        .getCalendar(employeeCode, today, today)
+        .then((days) => setDay(days[0] ?? null))
+        .catch(() => undefined);
+    },
+    { types: ["AttendanceChanged", "AdjustmentApplied", "AdjustmentManagerApproved", "AdjustmentRejected", "AttendanceNoteCreated", "LeaveApproved", "ReturnApproved"] },
+  );
+
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
@@ -82,6 +96,7 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
       const record = await attendanceApi.punch();
       notify({ ok: true, message: record.checkOutTime ? "Ra ca thành công." : "Vào ca thành công." });
       load();
+      emitLocal(LOCAL_ATTENDANCE_CHANGED);
       onPunched?.();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });

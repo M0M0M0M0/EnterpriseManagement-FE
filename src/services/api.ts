@@ -7,13 +7,12 @@ import type {
   ChangePasswordRequest,
   CreateDepartmentRequest,
   CreateEmployeeRequest,
+  CreateEmployeeResult,
   CreateLeaveTypeRequest,
   CreateMenuRequest,
   CreatePermissionRequest,
   CreateRoleRequest,
   CreatePositionRequest,
-  CreateUserRequest,
-  CreateUserResult,
   DepartmentDto,
   EmployeeDashboardDto,
   EmployeeDto,
@@ -28,6 +27,7 @@ import type {
   OrgTreeNodeDto,
   PermissionDto,
   PositionDto,
+  ResetPasswordResult,
   RoleDto,
   SubmitAdjustmentRequest,
   SubmitLeaveRequest,
@@ -38,8 +38,6 @@ import type {
   UpdatePermissionRequest,
   UpdatePositionRequest,
   UpdateRoleRequest,
-  UpdateUserRequest,
-  UserDto,
 } from "../types/domain";
 
 export const authApi = {
@@ -65,7 +63,7 @@ export const employeeApi = {
   getTeamRecursive: (managerEmployeeCode: string) =>
     http.get<EmployeeDto[]>(`/employees/team/${managerEmployeeCode}/all`),
   create: (request: CreateEmployeeRequest) =>
-    http.post<EmployeeDto>("/employees", request),
+    http.post<CreateEmployeeResult>("/employees", request),
   update: (employeeCode: string, request: UpdateEmployeeRequest) =>
     http.put<EmployeeDto>(`/employees/${employeeCode}`, request),
   setActive: (employeeCode: string, isActive: boolean) =>
@@ -165,16 +163,12 @@ export const leaveRequestApi = {
 };
 
 export const userApi = {
-  getAll: () => http.get<UserDto[]>("/users"),
-  create: (request: CreateUserRequest) => http.post<CreateUserResult>("/users", request),
-  update: (username: string, request: UpdateUserRequest) =>
-    http.put<UserDto>(`/users/${username}`, request),
   setRoles: (username: string, roleCodes: string[]) =>
-    http.put<UserDto>(`/users/${username}/roles`, { roleCodes }),
+    http.put<unknown>(`/users/${username}/roles`, { roleCodes }),
   setActive: (username: string, isActive: boolean) =>
-    http.put<UserDto>(`/users/${username}/active`, { isActive }),
+    http.put<unknown>(`/users/${username}/active`, { isActive }),
   resetPassword: (username: string) =>
-    http.post<CreateUserResult>(`/users/${username}/reset-password`),
+    http.post<ResetPasswordResult>(`/users/${username}/reset-password`),
 };
 
 export const roleApi = {

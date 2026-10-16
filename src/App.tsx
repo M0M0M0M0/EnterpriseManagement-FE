@@ -41,9 +41,6 @@ const ManagerOrgTreePage = lazy(() =>
   import("./pages/ManagerPages").then((m) => ({ default: m.ManagerOrgTreePage })),
 );
 
-const AdminUsersPage = lazy(() =>
-  import("./pages/AdminApiFeedbackPages").then((m) => ({ default: m.AdminUsersApiPage })),
-);
 const AdminEmployeesPage = lazy(() =>
   import("./pages/AdminPages").then((m) => ({ default: m.AdminEmployeesPage })),
 );
@@ -126,7 +123,7 @@ function AppRedirect() {
   if (!role) return <Navigate to="/login" replace />;
   if (role === "employee") return <Navigate to="/employee/dashboard" replace />;
   if (role === "manager") return <Navigate to="/manager/dashboard" replace />;
-  return <Navigate to="/admin/users" replace />;
+  return <Navigate to="/admin/employees" replace />;
 }
 
 // Mọi trang nghiệp vụ (đều có 1 Menu tương ứng đã seed sẵn permission "page.*") gác bằng
@@ -147,7 +144,6 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/hr/attendance-notes", element: <HrAttendanceNotesPage /> },
   { path: "/hr/adjustments", element: <HrAdjustmentsPage /> },
   { path: "/hr/leave-returns", element: <HrLeaveReturnsPage /> },
-  { path: "/admin/users", element: <AdminUsersPage /> },
   { path: "/admin/employees", element: <AdminEmployeesPage /> },
   { path: "/admin/departments", element: <AdminDepartmentsPage /> },
   { path: "/admin/positions", element: <AdminPositionsPage /> },
@@ -181,6 +177,7 @@ function App() {
             <Route path={path} element={element} />
           </Route>
         ))}
+        <Route path="/admin/users" element={<Navigate to="/admin/employees" replace />} />
         <Route path="/admin/audit-log" element={<Navigate to="/admin/audit" replace />} />
 
         <Route path="/" element={<Navigate to="/app" replace />} />

@@ -16,6 +16,7 @@ import {
 } from "@fluentui/react-components";
 import { ArrowDownloadRegular, ChevronDownRegular, ChevronRightRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import {
   AdjustmentBadge,
   AttendanceBadge,
@@ -82,6 +83,11 @@ export function ManagerDashboardPage() {
       .catch((err) => notify({ ok: false, message: errorMessage(err) }))
       .finally(() => setLoading(false));
   }, [managerCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useAutoRefresh(
+    () => (managerCode ? dashboardApi.manager(managerCode).then(setData).catch(() => undefined) : undefined),
+    { types: ["AttendanceChanged", "LeaveSubmitted", "LeaveApproved", "LeaveRejected", "ReturnSubmitted", "ReturnApproved", "ReturnRejected", "AdjustmentSubmitted", "AdjustmentManagerApproved", "AdjustmentRejected", "AdjustmentApplied"] },
+  );
 
   if (loading || !data) return <Spinner label="Đang tải dashboard..." />;
 
@@ -245,6 +251,17 @@ export function ManagerAttendancePage() {
     else loadPending();
   }, [tab, managerCode, range.startDate, range.endDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Tải lại im lặng theo tab đang xem.
+  useAutoRefresh(
+    () =>
+      tab === "team"
+        ? managerCode
+          ? attendanceApi.getByTeam(managerCode, range.startDate, range.endDate).then(setRecords).catch(() => undefined)
+          : undefined
+        : attendanceApi.getPendingAdjustments().then(setPending).catch(() => undefined),
+    { types: ["AdjustmentSubmitted", "AdjustmentManagerApproved", "AdjustmentRejected", "AdjustmentApplied"] },
+  );
+
   const review = async (id: number, action: "approve" | "reject") => {
     setBusyId(id);
     try {
@@ -407,6 +424,23 @@ export function ManagerLeavePage() {
   };
 
   useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tải lại im lặng; dialog từ chối/duyệt đang mở giữ nguyên nội dung.
+  useAutoRefresh(
+    () =>
+      Promise.all([
+        leaveRequestApi.getPending(),
+        leaveRequestApi.getHistory(),
+        leaveReturnApi.getPending().catch(() => [] as LeaveReturnRequestDto[]),
+      ])
+        .then(([p, h, rt]) => {
+          setPending(p);
+          setHistory(h);
+          setReturns(rt);
+        })
+        .catch(() => undefined),
+    { types: ["LeaveSubmitted", "ReturnSubmitted", "LeaveApproved", "LeaveRejected"] },
+  );
 
   const approve = async (id: number) => {
     setBusyId(id);
