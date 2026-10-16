@@ -72,6 +72,13 @@ import {
   shortLeaveSlots,
 } from "../utils/format";
 
+// Chuỗi ngày yyyy-MM-dd có rơi vào thứ Bảy/Chủ nhật không (tính theo giờ địa phương, tránh lệch múi giờ).
+function isWeekendDate(value: string) {
+  const [y, m, d] = value.split("-").map(Number);
+  const day = new Date(y, m - 1, d).getDay();
+  return day === 0 || day === 6;
+}
+
 function useEmployeeCode() {
   return useAuthStore((state) => state.session?.employeeCode);
 }
@@ -463,6 +470,9 @@ export function EmployeeLeavePage() {
     } else if (!form.startDate || !form.endDate) {
       notify({ ok: false, message: "Vui lòng nhập đầy đủ ngày nghỉ." });
       return;
+    } else if (isWeekendDate(form.startDate) || isWeekendDate(form.endDate)) {
+      notify({ ok: false, message: "Ngày bắt đầu và ngày kết thúc phải là ngày làm việc (thứ Hai đến thứ Sáu)." });
+      return;
     } else if (isAnnualLeave && form.startDate < minAnnualDate) {
       notify({ ok: false, message: `Nghỉ có phép phải xin trước ít nhất 1 ngày. Ngày sớm nhất có thể xin: ${formatDate(minAnnualDate)}.` });
       return;
@@ -712,7 +722,7 @@ export function EmployeeLeavePage() {
                     <Field
                       label="Từ ngày"
                       required
-                      hint={isAnnualLeave ? `Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc.` : undefined}
+                      hint={isAnnualLeave ? `Chọn ngày làm việc (thứ Hai đến thứ Sáu). Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc.` : "Chọn ngày làm việc (thứ Hai đến thứ Sáu)."}
                     >
                       <Input
                         type="date"
