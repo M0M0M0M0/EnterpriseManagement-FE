@@ -103,6 +103,9 @@ export const attendanceApi = {
   punch: () => http.post<AttendanceRecordDto>("/attendance/punch"),
   getHistory: (employeeCode: string) =>
     http.get<AttendanceRecordDto[]>(`/attendance/${employeeCode}/history`),
+  // Cấp dưới (đệ quy) của một quản lý, không gồm chính họ.
+  getByTeam: (managerCode: string, startDate: string, endDate: string) =>
+    http.get<AttendanceRecordDto[]>(`/attendance/team/${managerCode}?startDate=${startDate}&endDate=${endDate}`),
   getByDepartment: (departmentCode: string, startDate: string, endDate: string) =>
     http.get<AttendanceRecordDto[]>(
       `/attendance/department/${departmentCode}?startDate=${startDate}&endDate=${endDate}`,

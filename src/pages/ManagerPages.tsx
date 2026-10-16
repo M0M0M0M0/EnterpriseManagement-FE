@@ -210,9 +210,9 @@ export function ManagerAttendancePage() {
   const managerCode = useManagerCode();
   const notify = useNotify();
   const [tab, setTab] = useState("team");
-  const [department, setDepartment] = useState("");
+  // Mặc định chỉ xem hôm nay; muốn xem khoảng khác thì đổi ngày.
   const [range, setRange] = useState({
-    startDate: isoDate(new Date(new Date().setDate(1))),
+    startDate: isoDate(),
     endDate: isoDate(),
   });
   const [records, setRecords] = useState<AttendanceRecordDto[]>([]);
@@ -220,16 +220,12 @@ export function ManagerAttendancePage() {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!managerCode) return;
-    employeeApi.getByCode(managerCode).then((e) => setDepartment(e.departmentCode)).catch(() => undefined);
-  }, [managerCode]);
-
   const loadTeam = () => {
-    if (!department) return;
+    if (!managerCode) return;
     setLoading(true);
+    // Danh sách là cấp dưới mà người này quản lý (đệ quy), không phải mọi người cùng phòng ban.
     attendanceApi
-      .getByDepartment(department, range.startDate, range.endDate)
+      .getByTeam(managerCode, range.startDate, range.endDate)
       .then(setRecords)
       .catch((err) => notify({ ok: false, message: errorMessage(err) }))
       .finally(() => setLoading(false));
@@ -247,7 +243,7 @@ export function ManagerAttendancePage() {
   useEffect(() => {
     if (tab === "team") loadTeam();
     else loadPending();
-  }, [tab, department, range.startDate, range.endDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, managerCode, range.startDate, range.endDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const review = async (id: number, action: "approve" | "reject") => {
     setBusyId(id);
@@ -270,7 +266,7 @@ export function ManagerAttendancePage() {
     <div className="page-stack">
       <PageHeader
         title="Quản lý chấm công"
-        description="Xem chấm công theo phòng ban và xác nhận yêu cầu chỉnh sửa. Quản lý xác nhận nhân viên có mặt, bộ phận nhân sự sẽ là người áp dụng chỉnh sửa vào dữ liệu."
+        description="Xem chấm công của nhân viên bạn quản lý (mặc định hôm nay) và xác nhận yêu cầu chỉnh sửa. Quản lý xác nhận nhân viên có mặt, bộ phận nhân sự sẽ là người áp dụng chỉnh sửa vào dữ liệu."
         action={
           <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
             <Tab value="team">Chấm công team</Tab>
