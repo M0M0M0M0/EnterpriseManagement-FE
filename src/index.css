@@ -2519,3 +2519,9 @@ p {
 
 .privacy-text { display: grid; gap: 8px; line-height: 1.6; }
 .privacy-text p { margin: 0; }
+
+.punch-button.is-locked {
+  background: linear-gradient(135deg, #b8b5c7, #8e8aa3);
+  box-shadow: none;
+  opacity: 1;
+}

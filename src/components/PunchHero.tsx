@@ -1,5 +1,5 @@
 import { Spinner } from "@fluentui/react-components";
-import { FingerprintRegular, LocationRegular, SignOutRegular } from "@fluentui/react-icons";
+import { FingerprintRegular, LockClosedRegular, LocationRegular, SignOutRegular } from "@fluentui/react-icons";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import { errorMessage } from "../services/http";
 import type { AttendanceCalendarDayDto } from "../types/attendanceHr";
 import type { OfficeLocationDto } from "../types/domain";
 import { formatTime, isoDate } from "../utils/format";
+import { isPunchLocked } from "../utils/punchLock";
 import { CameraCaptureDialog } from "./CameraCaptureDialog";
 import { useNotify } from "./useNotify";
 
@@ -130,6 +131,8 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
 
   // Lần chấm công đầu tiên trong ngày là vào ca; các lần sau là ra ca (đè giờ ra cũ), khớp PunchAsync ở backend.
   const clockedIn = Boolean(day?.checkInTime);
+  // Quá 18:00 thì khoá chấm công; đồng hồ đã chạy từng giây nên nút tự khoá đúng giờ.
+  const locked = isPunchLocked(now);
 
   const askPhoto = () =>
     new Promise<Blob | null>((resolve) => {
@@ -232,11 +235,21 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
 
       <div className="punch-action">
         <div className="punch-button-wrap">
-          <span className="punch-pulse" />
-          <span className="punch-pulse delay" />
-          <button type="button" className="punch-button" disabled={punching || loading} onClick={punch}>
+          {locked ? null : <span className="punch-pulse" />}
+          {locked ? null : <span className="punch-pulse delay" />}
+          <button
+            type="button"
+            className={`punch-button${locked ? " is-locked" : ""}`}
+            disabled={punching || loading || locked}
+            onClick={punch}
+          >
             {punching || loading ? (
               <Spinner size="small" />
+            ) : locked ? (
+              <>
+                <LockClosedRegular />
+                <span>Đã khoá</span>
+              </>
             ) : (
               <>
                 {clockedIn ? <SignOutRegular /> : <FingerprintRegular />}
@@ -245,7 +258,13 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
             )}
           </button>
         </div>
-        <p>{clockedIn ? "Bấm lại để cập nhật giờ ra." : "Bấm để vào ca làm việc hôm nay."}</p>
+        <p>
+          {locked
+            ? "Đã quá 18:00 nên chấm công bị khoá. Nếu quên chấm công, hãy gửi yêu cầu điều chỉnh chấm công."
+            : clockedIn
+              ? "Bấm lại để cập nhật giờ ra."
+              : "Bấm để vào ca làm việc hôm nay."}
+        </p>
         {office ? (
           <p className="punch-office">
             <LocationRegular /> {office.name} · bán kính {Math.round(office.allowedRadiusMeters)} m
