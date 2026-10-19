@@ -26,6 +26,7 @@ import {
 } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
+import { PagedItems } from "../components/PagedItems";
 import { useNotify } from "../components/useNotify";
 import { useCan } from "../hooks/useCan";
 import {
@@ -79,7 +80,6 @@ const GENDER_LABEL: Record<string, string> = { Male: "Nam", Female: "Nữ", Othe
 type Credential = { username: string; password: string; isReset: boolean };
 type PendingAction =
   | { kind: "resign"; employee: EmployeeDto }
-  | { kind: "lock"; employee: EmployeeDto }
   | { kind: "reset"; employee: EmployeeDto };
 
 export function AdminEmployeesPage() {
@@ -329,17 +329,14 @@ export function AdminEmployeesPage() {
         const result = await userApi.resetPassword(employee.username);
         showCredential(result.username, result.generatedPassword, true);
         notify({ ok: true, message: "Đã đặt lại mật khẩu." });
-      } else if (kind === "lock") {
-        await userApi.setActive(employee.username, !employee.isAccountActive);
-        notify({ ok: true, message: employee.isAccountActive ? "Đã khoá tài khoản." : "Đã mở tài khoản." });
       } else {
         const resigning = isWorking(employee.employmentStatus);
         await employeeApi.setActive(employee.employeeCode, !resigning);
         notify({
           ok: true,
           message: resigning
-            ? "Đã cho nghỉ việc và khoá tài khoản."
-            : "Đã phục hồi nhân viên và mở tài khoản.",
+            ? "Đã khoá nhân viên và tài khoản."
+            : "Đã mở khoá nhân viên và tài khoản.",
         });
       }
       setPending(null);
@@ -352,15 +349,15 @@ export function AdminEmployeesPage() {
     }
   };
 
-  // Mở khoá tài khoản không rủi ro nên chạy luôn; khoá/nghỉ việc/đặt lại mật khẩu cần xác nhận.
-  const toggleAccount = async (employee: EmployeeDto) => {
-    if (employee.isAccountActive) {
-      setPending({ kind: "lock", employee });
+  // Mở khoá không rủi ro nên chạy luôn; khoá cần xác nhận.
+  const toggleLock = async (employee: EmployeeDto) => {
+    if (isWorking(employee.employmentStatus)) {
+      setPending({ kind: "resign", employee });
       return;
     }
     try {
-      await userApi.setActive(employee.username, true);
-      notify({ ok: true, message: "Đã mở tài khoản." });
+      await employeeApi.setActive(employee.employeeCode, true);
+      notify({ ok: true, message: "Đã mở khoá nhân viên và tài khoản." });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
@@ -377,23 +374,16 @@ export function AdminEmployeesPage() {
         label: "Đặt lại",
       };
     }
-    if (kind === "lock") {
-      return {
-        title: "Khoá tài khoản?",
-        description: `Tài khoản "${employee.username}" sẽ không thể đăng nhập cho đến khi được mở lại. Trạng thái làm việc không đổi.`,
-        label: "Khoá tài khoản",
-      };
-    }
     return isWorking(employee.employmentStatus)
       ? {
-          title: "Cho nhân viên nghỉ việc?",
+          title: "Khoá nhân viên?",
           description: `Nhân viên "${employee.fullName}" sẽ chuyển sang trạng thái Đã nghỉ việc và tài khoản đăng nhập "${employee.username}" sẽ bị khoá.`,
-          label: "Cho nghỉ việc",
+          label: "Khoá",
         }
       : {
-          title: "Phục hồi nhân viên?",
+          title: "Mở khoá nhân viên?",
           description: `Nhân viên "${employee.fullName}" sẽ trở lại trạng thái Đang làm việc và tài khoản đăng nhập "${employee.username}" sẽ được mở lại.`,
-          label: "Phục hồi",
+          label: "Mở khoá",
         };
   })();
 
@@ -516,7 +506,9 @@ export function AdminEmployeesPage() {
       {loading ? (
         <Spinner label="Đang tải..." />
       ) : visibleEmployees.length ? (
-        <div className="enterprise-table-wrap">
+        <PagedItems items={visibleEmployees} resetKey={visibleEmployees.length}>
+{(shown) => (
+<div className="enterprise-table-wrap">
           <table className="enterprise-table">
             <thead>
               <tr>
@@ -534,7 +526,7 @@ export function AdminEmployeesPage() {
               </tr>
             </thead>
             <tbody>
-              {visibleEmployees.map((e) => (
+              {shown.map((e) => (
                 <tr key={e.employeeCode}>
                   <td>{e.employeeCode}</td>
                   <td>
@@ -570,14 +562,10 @@ export function AdminEmployeesPage() {
                           Đặt lại mật khẩu
                         </Button>
                       ) : null}
-                      {canAccount ? (
-                        <Button size="small" onClick={() => toggleAccount(e)}>
-                          {e.isAccountActive ? "Khoá tài khoản" : "Mở tài khoản"}
-                        </Button>
-                      ) : null}
                       {canManage ? (
-                        <Button size="small" onClick={() => setPending({ kind: "resign", employee: e })}>
-                          {isWorking(e.employmentStatus) ? "Cho nghỉ việc" : "Phục hồi"}
+                        // Một nút duy nhất: khoá = cho nghỉ việc và khoá tài khoản đăng nhập; mở khoá = phục hồi cả hai.
+                        <Button size="small" onClick={() => toggleLock(e)}>
+                          {isWorking(e.employmentStatus) ? "Khoá" : "Mở khoá"}
                         </Button>
                       ) : null}
                     </div>
@@ -587,6 +575,8 @@ export function AdminEmployeesPage() {
             </tbody>
           </table>
         </div>
+)}
+</PagedItems>
       ) : (
         <EmptyState
           title={employees.length ? "Không có nhân viên phù hợp." : "Chưa có nhân viên"}

@@ -10,6 +10,7 @@ import { overtimeApi } from "../services/overtimeApi";
 import type { OvertimeQuotaDto, OvertimeRequestDto } from "../types/overtime";
 import { formatDate, isoDate } from "../utils/format";
 import { OVERTIME_EVENTS, overtimeDurationLabel } from "../utils/overtime";
+import { PagedItems } from "../components/PagedItems";
 
 const statusFilters = [
   { value: "", label: "Tất cả" },
@@ -196,8 +197,10 @@ export function EmployeeOvertimePage() {
           </SectionPanel>
           <SectionPanel title="Đơn của tôi">
             {items.length ? (
-              <div className="review-list">
-                {items.map((item) => (
+              <PagedItems items={items} resetKey={items.length}>
+{(shown) => (
+<div className="review-list">
+                {shown.map((item) => (
                   <OvertimeItem
                     key={item.id}
                     item={item}
@@ -211,6 +214,8 @@ export function EmployeeOvertimePage() {
                   />
                 ))}
               </div>
+)}
+</PagedItems>
             ) : (
               <EmptyState title="Chưa có đơn" description="Bạn chưa có đơn làm thêm giờ nào." />
             )}
@@ -306,8 +311,10 @@ export function OvertimeApprovalPanel({ onPendingCount }: { onPendingCount?: (co
     <>
       <SectionPanel title={`Chờ duyệt (${pending.length})`}>
         {pending.length ? (
-          <div className="review-list">
-            {pending.map((item) => (
+          <PagedItems items={pending} resetKey={pending.length}>
+{(shown) => (
+<div className="review-list">
+            {shown.map((item) => (
               <OvertimeItem
                 key={item.id}
                 item={item}
@@ -327,6 +334,8 @@ export function OvertimeApprovalPanel({ onPendingCount }: { onPendingCount?: (co
               />
             ))}
           </div>
+)}
+</PagedItems>
         ) : (
           <EmptyState title="Không có đơn chờ duyệt" description="Danh sách sẽ cập nhật khi có đơn làm thêm giờ mới." />
         )}
@@ -336,11 +345,15 @@ export function OvertimeApprovalPanel({ onPendingCount }: { onPendingCount?: (co
           <FilterSelect label="Trạng thái" value={status} options={statusFilters} onChange={setStatus} />
         </div>
         {filteredHistory.length ? (
-          <div className="review-list">
-            {filteredHistory.map((item) => (
+          <PagedItems items={filteredHistory} resetKey={filteredHistory.length}>
+{(shown) => (
+<div className="review-list">
+            {shown.map((item) => (
               <OvertimeItem key={item.id} item={item} showEmployee />
             ))}
           </div>
+)}
+</PagedItems>
         ) : (
           <EmptyState title="Chưa có lịch sử" description="Chưa có đơn làm thêm giờ nào được xử lý." />
         )}

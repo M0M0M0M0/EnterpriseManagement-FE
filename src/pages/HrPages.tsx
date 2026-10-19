@@ -37,6 +37,7 @@ import type {
 } from "../types/attendanceHr";
 import type { AttendanceAdjustmentDto, AttendanceRecordDto, DepartmentDto, EmployeeDto } from "../types/domain";
 import { formatDate, formatDateTime, formatTime, isoDate, leaveSessionLabels, sessionNames } from "../utils/format";
+import { PagedItems } from "../components/PagedItems";
 
 // ---- Nhãn/màu dùng chung cho trạng thái từng buổi (backend đã tính sẵn, client chỉ hiển thị) ----
 
@@ -666,8 +667,10 @@ export function HrAdjustmentsPage() {
       ) : loadError && !items.length ? (
         <RetryError message={loadError} onRetry={load} />
       ) : items.length ? (
-        <div className="review-list">
-          {items.map((item) => (
+        <PagedItems items={items} resetKey={items.length}>
+{(shown) => (
+<div className="review-list">
+          {shown.map((item) => (
             <article key={item.id} className="review-content">
               <div>
                 <strong>
@@ -705,6 +708,8 @@ export function HrAdjustmentsPage() {
             </article>
           ))}
         </div>
+)}
+</PagedItems>
       ) : (
         <EmptyState title="Không có yêu cầu" description="Không có yêu cầu nào chờ xử lý." />
       )}
@@ -837,8 +842,10 @@ export function HrLeaveReturnsPage() {
       ) : loadError && !items.length ? (
         <RetryError message={loadError} onRetry={load} />
       ) : items.length ? (
-        <div className="review-list">
-          {items.map((item) => (
+        <PagedItems items={items} resetKey={items.length}>
+{(shown) => (
+<div className="review-list">
+          {shown.map((item) => (
             <article key={item.id} className="review-content">
               <div>
                 <strong>
@@ -861,6 +868,8 @@ export function HrLeaveReturnsPage() {
             </article>
           ))}
         </div>
+)}
+</PagedItems>
       ) : (
         <EmptyState title="Không có yêu cầu" description="Không có yêu cầu đi làm lại nào chờ xác nhận." />
       )}

@@ -81,6 +81,7 @@ import {
   shortLeaveSlotLabel,
   shortLeaveSlots,
 } from "../utils/format";
+import { PagedItems } from "../components/PagedItems";
 
 // Chuỗi ngày yyyy-MM-dd có rơi vào thứ Bảy/Chủ nhật không (tính theo giờ địa phương, tránh lệch múi giờ).
 function isWeekendDate(value: string) {
@@ -412,8 +413,10 @@ export function EmployeeAttendancePage() {
             {historyView === "calendar" ? (
               employeeCode ? <AttendanceMonthCalendar employeeCode={employeeCode} onRequestAdjustment={canAdjust ? openDialog : undefined} /> : null
             ) : history.length ? (
-              <div className="attendance-list">
-                {history.map((record) => (
+              <PagedItems items={history} resetKey={history.length}>
+{(shown) => (
+<div className="attendance-list">
+                {shown.map((record) => (
                   <article className="attendance-list-item" key={record.attendanceDate}>
                     <div className="date-block">
                       <strong>{formatDate(record.attendanceDate, "dd")}</strong>
@@ -435,6 +438,8 @@ export function EmployeeAttendancePage() {
                   </article>
                 ))}
               </div>
+)}
+</PagedItems>
             ) : (
               <EmptyState title="Không có dữ liệu" description="Chưa có bản ghi chấm công." />
             )}

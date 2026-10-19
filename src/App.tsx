@@ -161,6 +161,7 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/hr/adjustments", element: <HrAdjustmentsPage /> },
   { path: "/hr/leave-returns", element: <HrLeaveReturnsPage /> },
   { path: "/hr/timesheet", element: <HrTimesheetPage /> },
+  { path: "/manager/timesheet", element: <HrTimesheetPage team /> },
   { path: "/hr/holidays", element: <HrHolidaysPage /> },
   { path: "/admin/employees", element: <AdminEmployeesPage /> },
   { path: "/admin/departments", element: <AdminDepartmentsPage /> },

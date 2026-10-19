@@ -3,6 +3,7 @@ import { ArrowDownloadRegular, ChevronLeftRegular, ChevronRightRegular, DeleteRe
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RetryError } from "../components/ReviewParts";
 import { ConfirmDialog, EmptyState, PageHeader, SectionPanel } from "../components/ui";
+import { PagedItems } from "../components/PagedItems";
 import { useNotify } from "../components/useNotify";
 import { useCan } from "../hooks/useCan";
 import { errorMessage } from "../services/http";
@@ -23,7 +24,8 @@ function previousMonth() {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
-export function HrTimesheetPage() {
+// team = true: trang của quản lý (route /manager/timesheet), chỉ gồm cấp dưới của mình; nút chốt/mở lại bị ẩn vì thiếu quyền timesheet.manage.
+export function HrTimesheetPage({ team = false }: { team?: boolean } = {}) {
   const notify = useNotify();
   const canManage = useCan()("timesheet.manage");
   const [period, setPeriod] = useState(previousMonth);
@@ -43,15 +45,14 @@ export function HrTimesheetPage() {
         setLoading(true);
         setError("");
       }
-      return timesheetApi
-        .get(period.year, period.month)
+      return (team ? timesheetApi.getTeam(period.year, period.month) : timesheetApi.get(period.year, period.month))
         .then(setSheet)
         .catch((err) => {
           if (!silent) setError(errorMessage(err));
         })
         .finally(() => setLoading(false));
     },
-    [period],
+    [period, team],
   );
 
   useEffect(() => {
@@ -150,7 +151,9 @@ export function HrTimesheetPage() {
       ) : error && !sheet ? (
         <RetryError message={error} onRetry={() => void load()} />
       ) : rows.length ? (
-        <div className="enterprise-table-wrap">
+        <PagedItems items={rows} resetKey={rows.length}>
+{(shown) => (
+<div className="enterprise-table-wrap">
           <table className="enterprise-table">
             <thead>
               <tr>
@@ -165,7 +168,7 @@ export function HrTimesheetPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {shown.map((r) => (
                 <tr key={r.employeeCode}>
                   <td>{r.employeeCode}</td>
                   <td>{r.employeeName}</td>
@@ -180,6 +183,8 @@ export function HrTimesheetPage() {
             </tbody>
           </table>
         </div>
+)}
+</PagedItems>
       ) : (
         <EmptyState title="Không có nhân viên" description="Không có nhân viên nào trong bảng công này." />
       )}

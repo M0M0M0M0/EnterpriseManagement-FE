@@ -30,6 +30,8 @@ export const holidayApi = {
 // Bảng công tháng (timesheet.manage).
 export const timesheetApi = {
   get: (year: number, month: number) => http.get<TimesheetDto>(`/timesheets?year=${year}&month=${month}`),
+  // Bảng công của team mình (quản lý chỉ xem).
+  getTeam: (year: number, month: number) => http.get<TimesheetDto>(`/timesheets/team?year=${year}&month=${month}`),
   close: (year: number, month: number) => http.post<unknown>(`/timesheets/close?year=${year}&month=${month}`),
   reopen: (year: number, month: number) => http.delete<void>(`/timesheets/close?year=${year}&month=${month}`),
 };

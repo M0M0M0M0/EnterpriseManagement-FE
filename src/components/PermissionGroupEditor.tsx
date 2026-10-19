@@ -31,6 +31,7 @@ const FUNCTIONAL_GROUPS: FunctionalGroupDef[] = [
       "page.manager.dashboard",
       "page.manager.employees",
       "page.manager.attendance",
+      "page.manager.timesheet",
       "page.manager.leave",
       "page.manager.organization",
       "page.manager.orgtree",

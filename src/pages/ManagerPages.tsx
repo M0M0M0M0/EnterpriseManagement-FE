@@ -68,6 +68,7 @@ import {
   requestLabels,
   sessionNames,
 } from "../utils/format";
+import { PagedItems } from "../components/PagedItems";
 
 function useManagerCode() {
   return useAuthStore((state) => state.session?.employeeCode);
@@ -588,8 +589,10 @@ export function ManagerAttendancePage() {
       ) : pendingError && !pending.length ? (
         <RetryError message={pendingError} onRetry={loadPending} />
       ) : pending.length ? (
-        <div className="review-list">
-          {pending.map((item) => (
+        <PagedItems items={pending} resetKey={pending.length}>
+{(shown) => (
+<div className="review-list">
+          {shown.map((item) => (
             <article key={item.id} className="review-content">
               <div>
                 <strong>{item.employeeName}</strong>
@@ -619,6 +622,8 @@ export function ManagerAttendancePage() {
             </article>
           ))}
         </div>
+)}
+</PagedItems>
       ) : (
         <EmptyState title="Không có yêu cầu chờ duyệt" description="Mọi yêu cầu chỉnh sửa chấm công đã được xử lý." />
       )}
@@ -906,8 +911,10 @@ export function ManagerLeavePage() {
         returnsError && !returns.length ? (
           <RetryError message={returnsError} onRetry={load} />
         ) : returns.length ? (
-          <div className="review-list">
-            {returns.map((item) => (
+          <PagedItems items={returns} resetKey={returns.length}>
+{(shown) => (
+<div className="review-list">
+            {shown.map((item) => (
               <article key={item.id} className="review-content">
                 <div>
                   <strong>{item.employeeName}</strong>
@@ -961,12 +968,16 @@ export function ManagerLeavePage() {
               </article>
             ))}
           </div>
+)}
+</PagedItems>
         ) : (
           <EmptyState title="Không có yêu cầu đi làm lại" description="Không có yêu cầu đi làm lại chờ duyệt." />
         )
       ) : list.length ? (
-        <div className="review-list">
-          {list.map((item) => (
+        <PagedItems items={list} resetKey={list.length}>
+{(shown) => (
+<div className="review-list">
+          {shown.map((item) => (
             <article
               key={item.id}
               className="review-content mgr-clickable"
@@ -1003,6 +1014,8 @@ export function ManagerLeavePage() {
             </article>
           ))}
         </div>
+)}
+</PagedItems>
       ) : (
         <EmptyState
           title={tab === "pending" ? "Không có đơn chờ duyệt" : "Chưa có lịch sử"}
