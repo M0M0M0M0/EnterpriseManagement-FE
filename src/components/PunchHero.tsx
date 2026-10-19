@@ -15,6 +15,7 @@ import { isPunchLocked } from "../utils/punchLock";
 import { privacyApi } from "../services/privacyApi";
 import { CameraCaptureDialog } from "./CameraCaptureDialog";
 import { PrivacyConsentDialog } from "./PrivacyConsentDialog";
+import { useConfirm } from "./useConfirm";
 import { useNotify } from "./useNotify";
 
 const GOAL_HOURS = 8;
@@ -136,6 +137,7 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
   // Quá 22:00 thì khoá chấm công; đồng hồ đã chạy từng giây nên nút tự khoá đúng giờ.
   const locked = isPunchLocked(now);
 
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [consentOpen, setConsentOpen] = useState(false);
   const [consentBusy, setConsentBusy] = useState(false);
 
@@ -167,6 +169,17 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
   // Các bước như mobile: lấy vị trí, báo ngoài bán kính ngay, chỉ chấm công vào mới chụp ảnh, rồi gửi backend.
   const punch = async () => {
     const wasClockedIn = clockedIn;
+    // Chấm công ra ghi đè giờ ra cũ nên hỏi lại cho chắc.
+    if (
+      wasClockedIn &&
+      !(await confirm({
+        title: "Chấm công ra?",
+        description: `Ghi nhận giờ ra lúc ${format(new Date(), "HH:mm")}. Lần chấm công ra sau sẽ ghi đè giờ ra này.`,
+        confirmLabel: "Chấm công ra",
+      }))
+    ) {
+      return;
+    }
     setPunching(true);
     try {
       // Lần đầu (hoặc khi chính sách đổi) phải đồng ý thu thập vị trí/ảnh trước khi chấm công.
@@ -295,6 +308,7 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
           </p>
         ) : null}
       </div>
+      {confirmDialog}
       <PrivacyConsentDialog open={consentOpen} busy={consentBusy} onAgree={agreeConsent} onDecline={() => setConsentOpen(false)} />
       <CameraCaptureDialog open={cameraOpen} onCapture={closeCamera} onCancel={() => closeCamera(null)} />
     </section>

@@ -44,6 +44,7 @@ import {
 import { AttendanceMonthCalendar } from "../components/AttendanceMonthCalendar";
 import { PunchHero } from "../components/PunchHero";
 import { useNotify } from "../components/useNotify";
+import { useConfirm } from "../components/useConfirm";
 import {
   attendanceApi,
   dashboardApi,
@@ -240,6 +241,7 @@ export function EmployeeDashboardPage() {
 
 export function EmployeeAttendancePage() {
   const notify = useNotify();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [history, setHistory] = useState<AttendanceRecordDto[]>([]);
   const [adjustments, setAdjustments] = useState<AttendanceAdjustmentDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -345,6 +347,21 @@ export function EmployeeAttendancePage() {
       notify({ ok: false, message: "Ngày cần chỉnh sửa phải trong vòng 366 ngày gần đây và không ở tương lai." });
       return;
     }
+    const proposed = [
+      form.newCheckInTime ? `giờ vào ${form.newCheckInTime}` : "",
+      form.newCheckOutTime ? `giờ ra ${form.newCheckOutTime}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+    if (
+      !(await confirm({
+        title: "Gửi yêu cầu điều chỉnh công?",
+        description: `Ngày ${formatDate(form.attendanceDate)}: đề xuất ${proposed}. Yêu cầu đi qua quản lý duyệt rồi nhân sự áp dụng.`,
+        confirmLabel: "Gửi yêu cầu",
+      }))
+    ) {
+      return;
+    }
     setSending(true);
     try {
       await attendanceApi.submitAdjustment({
@@ -369,6 +386,7 @@ export function EmployeeAttendancePage() {
 
   return (
     <div className="page-stack">
+      {confirmDialog}
       <PageHeader
         title="Điều chỉnh chấm công"
         description="Xem lịch chấm công của bạn và gửi yêu cầu khi một ngày bị ghi sai."
@@ -649,6 +667,7 @@ function LeaveCalendar({ requests, onOpen }: { requests: LeaveRequestDto[]; onOp
 
 export function EmployeeLeavePage() {
   const notify = useNotify();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const can = useCan();
   // Tạo/huỷ đơn và đi làm lại chỉ hiện với tài khoản có quyền leave.request.self (như PermissionGate bên mobile).
   const canSelf = can("leave.request.self");
@@ -785,6 +804,19 @@ export function EmployeeLeavePage() {
       notify({ ok: false, message: "Vui lòng nhập lý do xin nghỉ." });
       return;
     }
+    const typeName = leaveTypes.find((t) => t.leaveTypeCode === form.leaveTypeCode)?.leaveTypeName ?? "Nghỉ phép";
+    const when = isShortLeave
+      ? `hôm nay, khung ${shortLeaveSlotLabel(form.shortSlot)}`
+      : `${formatDate(form.startDate)}${form.endDate !== form.startDate ? ` - ${formatDate(form.endDate)}` : ""} (${leaveSessionLabels[form.session] ?? form.session})`;
+    if (
+      !(await confirm({
+        title: "Gửi đơn nghỉ phép?",
+        description: `${typeName}: ${when}. Lý do: ${form.reason.trim()}. Đơn sẽ được gửi tới quản lý để duyệt.`,
+        confirmLabel: "Gửi đơn",
+      }))
+    ) {
+      return;
+    }
     setSending(true);
     try {
       if (isShortLeave) {
@@ -837,9 +869,18 @@ export function EmployeeLeavePage() {
   };
 
   const withdrawCancelRequest = async (cancelId: number) => {
+    if (
+      !(await confirm({
+        title: "Rút yêu cầu hủy?",
+        description: "Bạn sẽ không xin hủy đơn nghỉ này nữa. Đơn nghỉ vẫn giữ nguyên và có hiệu lực.",
+        confirmLabel: "Rút yêu cầu",
+      }))
+    ) {
+      return;
+    }
     try {
       await leaveCancelApi.withdraw(cancelId);
-      notify({ ok: true, message: "Đã rút lại yêu cầu hủy." });
+      notify({ ok: true, message: "Đã rút yêu cầu hủy, đơn nghỉ vẫn có hiệu lực." });
       load();
     } catch (err) {
       notify({ ok: false, message: errorMessage(err, "Không rút lại được.") });
@@ -871,6 +912,7 @@ export function EmployeeLeavePage() {
 
   return (
     <div className="page-stack">
+      {confirmDialog}
       {employeeCode ? (
         <LeaveStatusDialog employeeCode={employeeCode} open={statusOpen} onClose={() => setStatusOpen(false)} />
       ) : null}
@@ -976,7 +1018,7 @@ export function EmployeeLeavePage() {
                           {item.status === "Approved" && canSelf ? (
                             pendingCancelOf(item.id) ? (
                               <>
-                                <small>Đang chờ quản lý duyệt hủy</small>
+                                <small>Bạn đã xin hủy đơn này, đang chờ quản lý duyệt</small>
                                 <Button
                                   size="small"
                                   onClick={(event) => {
@@ -984,7 +1026,7 @@ export function EmployeeLeavePage() {
                                     void withdrawCancelRequest(pendingCancelOf(item.id)!.id);
                                   }}
                                 >
-                                  Rút lại
+                                  Rút yêu cầu hủy
                                 </Button>
                               </>
                             ) : canRequestCancel(item) ? (
@@ -1365,6 +1407,7 @@ function ReturnLeaveDialog({
   onSubmitted: () => void;
 }) {
   const notify = useNotify();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   // Mặc định là buổi sớm nhất còn xin được (buổi đã bắt đầu thì backend không nhận), tránh báo lỗi ngay khi vừa mở.
   const earliest = earliestReturnSlot();
   const [fromDate, setFromDate] = useState(earliest.date);
@@ -1397,6 +1440,17 @@ function ReturnLeaveDialog({
       notify({ ok: false, message: "Vui lòng nhập lý do rút ngắn phép." });
       return;
     }
+    if (
+      !(await confirm({
+        title: "Rút ngắn nghỉ phép?",
+        description: preview
+          ? `Bạn sẽ đi làm lại từ ${sessionNames[fromSession].toLowerCase()} ${formatDate(fromDate)}: bỏ ${preview.sessionCount} buổi nghỉ còn lại và được hoàn ${String(preview.refundDays).replace(".", ",")} ngày phép. Yêu cầu sẽ gửi tới quản lý để duyệt.`
+          : "Yêu cầu sẽ gửi tới quản lý để duyệt.",
+        confirmLabel: "Gửi yêu cầu",
+      }))
+    ) {
+      return;
+    }
     setSending(true);
     try {
       await leaveReturnApi.submit({ fromDate, fromSession, reason });
@@ -1413,6 +1467,8 @@ function ReturnLeaveDialog({
   const orderIds = preview ? [...new Set(preview.sessions.map((s) => s.leaveRequestId))] : [];
 
   return (
+    <>
+      {confirmDialog}
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onClose()}>
       <DialogSurface>
         <DialogBody>
@@ -1471,5 +1527,6 @@ function ReturnLeaveDialog({
         </DialogBody>
       </DialogSurface>
     </Dialog>
+    </>
   );
 }

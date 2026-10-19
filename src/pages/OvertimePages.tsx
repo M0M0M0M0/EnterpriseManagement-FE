@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { FilterSelect, ReasonDialog, RetryError } from "../components/ReviewParts";
 import { ConfirmDialog, EmptyState, PageHeader, RequestBadge, SectionPanel } from "../components/ui";
 import { useNotify } from "../components/useNotify";
+import { useConfirm } from "../components/useConfirm";
 import { useAutoRefresh } from "../hooks/useAutoRefresh";
 import { useCan } from "../hooks/useCan";
 import { errorMessage } from "../services/http";
@@ -72,6 +73,7 @@ function QuotaPanel({ quota }: { quota: OvertimeQuotaDto }) {
 
 export function EmployeeOvertimePage() {
   const notify = useNotify();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const todayIso = isoDate();
   const [items, setItems] = useState<OvertimeRequestDto[]>([]);
   const [quota, setQuota] = useState<OvertimeQuotaDto | null>(null);
@@ -108,6 +110,15 @@ export function EmployeeOvertimePage() {
   })();
 
   const send = async () => {
+    if (
+      !(await confirm({
+        title: "Gửi đơn làm thêm giờ?",
+        description: `${formatDate(form.date)}, ${form.startTime} - ${form.endTime}. Lý do: ${form.reason.trim() || "(chưa nhập)"}. Đơn sẽ được gửi tới quản lý để duyệt.`,
+        confirmLabel: "Gửi đơn",
+      }))
+    ) {
+      return;
+    }
     setSending(true);
     try {
       await overtimeApi.submit({ date: form.date, startTime: form.startTime, endTime: form.endTime, reason: form.reason.trim() });
@@ -136,6 +147,7 @@ export function EmployeeOvertimePage() {
 
   return (
     <div className="page-stack">
+      {confirmDialog}
       <PageHeader
         title="Làm thêm giờ"
         description="Xin làm thêm giờ (OT). Đơn được quản lý duyệt như đơn nghỉ; đơn đã duyệt được cộng vào công của chính ngày đó."

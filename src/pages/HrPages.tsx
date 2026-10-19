@@ -25,6 +25,7 @@ import { useCan } from "../hooks/useCan";
 import { ConfirmDialog, EmptyState, FieldError, PageHeader, SectionPanel } from "../components/ui";
 import { ReasonDialog, RetryError } from "../components/ReviewParts";
 import { useNotify } from "../components/useNotify";
+import { useConfirm } from "../components/useConfirm";
 import { departmentApi, employeeApi } from "../services/api";
 import { errorMessage } from "../services/http";
 import { adjustmentProcessingApi, attendanceNoteApi, attendanceViewApi, leaveReturnApi } from "../services/hrApi";
@@ -303,6 +304,7 @@ export function HrAttendancePage() {
 
 export function HrAttendanceNotesPage() {
   const notify = useNotify();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [employees, setEmployees] = useState<EmployeeDto[]>([]);
   const [notes, setNotes] = useState<AttendanceNoteDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -380,6 +382,16 @@ export function HrAttendanceNotesPage() {
     if (form.endDate > isoDate()) return setFormError("Chỉ ghi nhận được đến hết ngày hôm nay.");
     if (!form.note.trim()) return setFormError("Vui lòng nhập ghi chú.");
     setFormError("");
+    const who = employees.find((e) => e.employeeCode === form.employeeCode)?.fullName ?? form.employeeCode;
+    if (
+      !(await confirm({
+        title: "Ghi nhận chấm công?",
+        description: `${who}, ${formatDate(form.startDate)}${form.endDate !== form.startDate ? ` - ${formatDate(form.endDate)}` : ""}, ${isMultiDay ? "cả ngày" : (sessionNames[form.session] ?? form.session).toLowerCase()}: ${sessionStatusLabels[form.status] ?? form.status}. Ghi chú: ${form.note.trim()}. Ghi nhận này thay đổi công của nhân viên.`,
+        confirmLabel: "Ghi nhận",
+      }))
+    ) {
+      return;
+    }
     setSending(true);
     try {
       await attendanceNoteApi.create({
@@ -418,6 +430,7 @@ export function HrAttendanceNotesPage() {
 
   return (
     <div className="page-stack">
+      {confirmDialog}
       <PageHeader
         title="Ghi nhận chấm công"
         description="Ghi chú ngoại lệ chấm công (đúng giờ, đi muộn, vắng) cho nhân viên theo buổi."
