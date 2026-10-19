@@ -1,4 +1,4 @@
-﻿import {
+import {
   Button,
   Menu,
   MenuItem,
@@ -187,6 +187,11 @@ export function AppShell() {
             group: NAV_GROUPS[groupRank(menu.route)]?.label,
           }))
       : null; // Menu chưa tải xong hoặc API lỗi -> giữ nav tĩnh theo role để không bao giờ mất điều hướng.
+
+  // Vùng nội dung tự cuộn (không phải cả trang) nên đổi trang thì đưa về đầu.
+  useEffect(() => {
+    document.querySelector(".app-column")?.scrollTo({ top: 0 });
+  }, [location.pathname]);
 
   if (!role || !session) return null;
   const navItems = dynamicNavItems && dynamicNavItems.length > 0 ? dynamicNavItems : navByRole[role];

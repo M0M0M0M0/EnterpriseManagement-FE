@@ -2819,3 +2819,40 @@ p {
 .my-today-strip .warn {
   color: #ef6c00;
 }
+
+/* ===== Khung ứng dụng: thanh bên và nội dung là hai vùng riêng, cuộn độc lập (từ màn hình tablet trở lên) ===== */
+@media (min-width: 821px) {
+  .app-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Vùng nội dung tự cuộn; thanh trên cùng (sticky) dính ở đầu vùng này */
+  .app-column {
+    height: 100dvh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .sidebar {
+    position: static;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Menu dài thì cuộn bên trong thanh bên, ẩn thanh cuộn */
+  .sidebar .side-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .sidebar .side-nav::-webkit-scrollbar {
+    display: none;
+  }
+}
