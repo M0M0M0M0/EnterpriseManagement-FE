@@ -895,7 +895,7 @@ export function ManagerLeavePage() {
           <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
             <Tab value="pending">Chờ duyệt ({pending.length})</Tab>
             <Tab value="history">Lịch sử</Tab>
-            <Tab value="returns">Yêu cầu rút ngắn nghỉ phép ({returns.length})</Tab>
+            <Tab value="returns">Rút ngắn phép ({returns.length})</Tab>
             <Tab value="cancels">Hủy phép{cancelCount ? ` (${cancelCount})` : ""}</Tab>
             <Tab value="overtime">Làm thêm giờ{overtimeCount ? ` (${overtimeCount})` : ""}</Tab>
           </TabList>
