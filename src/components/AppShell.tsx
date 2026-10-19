@@ -33,6 +33,7 @@ import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/useAuthStore";
 import { useMenuStore } from "../store/useMenuStore";
+import { usePendingBadges } from "../store/usePendingBadges";
 import type { UserRole } from "../types/domain";
 import { NotificationBell } from "./NotificationBell";
 import { ConfirmDialog, EmployeeAvatar } from "./ui";
@@ -127,7 +128,15 @@ function pageTitleFor(pathname: string, items: NavItem[]) {
   return items.find((item) => pathname.startsWith(item.to))?.label ?? "EMS";
 }
 
-function NavContent({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+function NavContent({
+  items,
+  onNavigate,
+  badges,
+}: {
+  items: NavItem[];
+  onNavigate?: () => void;
+  badges?: Record<string, number>;
+}) {
   const showGroups = new Set(items.map((item) => item.group).filter(Boolean)).size >= 2;
   return (
     <>
@@ -149,6 +158,11 @@ function NavContent({ items, onNavigate }: { items: NavItem[]; onNavigate?: () =
             <NavLink to={item.to} end={item.end} onClick={onNavigate}>
               {item.icon}
               <span>{item.label}</span>
+              {badges?.[item.to] ? (
+                <b className="nav-badge" aria-label={`${badges[item.to]} việc đang chờ`}>
+                  {badges[item.to] > 99 ? "99+" : badges[item.to]}
+                </b>
+              ) : null}
             </NavLink>
           </Fragment>
         ))}
@@ -188,6 +202,10 @@ export function AppShell() {
           }))
       : null; // Menu chưa tải xong hoặc API lỗi -> giữ nav tĩnh theo role để không bao giờ mất điều hướng.
 
+  // Số việc chờ xử lý của từng mục (duyệt đơn, xử lý điều chỉnh công...), hiện số đỏ cạnh tên mục.
+  const badgeRoutes = (dynamicNavItems ?? []).map((item) => item.to);
+  const badges = usePendingBadges(badgeRoutes, `${badgeRoutes.join("|")}@${location.pathname}`);
+
   // Vùng nội dung tự cuộn (không phải cả trang) nên đổi trang thì đưa về đầu.
   useEffect(() => {
     const column = document.querySelector(".app-column");
@@ -207,7 +225,7 @@ export function AppShell() {
   return (
     <div className={`app-shell role-${role}`}>
       <aside className="sidebar">
-        <NavContent items={navItems} />
+        <NavContent items={navItems} badges={badges} />
       </aside>
       <OverlayDrawer
         open={mobileOpen}
@@ -230,7 +248,7 @@ export function AppShell() {
           </DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
-          <NavContent items={navItems} onNavigate={() => setMobileOpen(false)} />
+          <NavContent items={navItems} badges={badges} onNavigate={() => setMobileOpen(false)} />
         </DrawerBody>
       </OverlayDrawer>
 

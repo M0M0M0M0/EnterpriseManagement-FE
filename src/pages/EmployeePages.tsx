@@ -1067,15 +1067,11 @@ export function EmployeeLeavePage() {
               {balances.length ? (
                 <div className="compact-list">
                   {balances.map((balance) => {
-                    const ratio = balance.allocatedTime <= 0 ? 0 : Math.min(1, balance.usedTime / balance.allocatedTime);
                     return (
                       <div className="compact-row leave-balance-row" key={`${balance.leaveTypeCode}-${balance.month ?? "y"}`}>
                         <div>
                           <strong>{balance.leaveTypeName}</strong>
                           <span>{balance.month ? `Tháng ${balance.month}/${balance.year}` : `Năm ${balance.year}`}</span>
-                          <div className="leave-progress" aria-hidden>
-                            <i style={{ width: `${ratio * 100}%` }} />
-                          </div>
                           <small>Đã dùng {formatLeaveTime(balance.usedTime, balance.unit)}</small>
                           {balance.refundedTime && balance.refundedTime > 0 ? (
                             <small className="leave-refunded">

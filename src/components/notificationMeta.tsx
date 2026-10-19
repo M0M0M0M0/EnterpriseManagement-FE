@@ -76,7 +76,9 @@ export function useOpenNotificationRoute() {
   return (item: NotificationDto) => {
     const route = item.route;
     if (!route) return;
-    if (status === "loaded" && !(menus ?? []).some((menu) => menu.route === route)) return;
+    // Route có thể kèm ?tab=... để mở đúng tab; menu khớp theo phần đường dẫn.
+    const path = route.split("?")[0];
+    if (status === "loaded" && !(menus ?? []).some((menu) => menu.route === path)) return;
     navigate(route);
   };
 }

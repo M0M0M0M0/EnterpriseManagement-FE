@@ -41,6 +41,9 @@ import {
   positionApi,
 } from "../services/api";
 import { leaveReturnApi } from "../services/hrApi";
+import { leaveCancelApi } from "../services/leaveCancelApi";
+import { overtimeApi } from "../services/overtimeApi";
+import { useSearchParams } from "react-router-dom";
 import { LeaveCancelApprovalPanel } from "./LeaveCancelPages";
 import { OvertimeApprovalPanel } from "./OvertimePages";
 import { errorMessage } from "../services/http";
@@ -720,7 +723,19 @@ export function ManagerLeavePage() {
   const canOvertimeView = can("overtime.request.view");
   const [pending, setPending] = useState<LeaveRequestDto[]>([]);
   const [history, setHistory] = useState<LeaveRequestDto[]>([]);
-  const [tab, setTab] = useState("pending");
+  // ?tab=returns|cancels|overtime|history: thông báo mở thẳng tab có yêu cầu mới.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const wanted = searchParams.get("tab");
+    return wanted && ["pending", "history", "returns", "cancels", "overtime"].includes(wanted) ? wanted : "pending";
+  });
+  // Đang ở trang này mà bấm thông báo khác tab thì chuyển tab theo.
+  useEffect(() => {
+    const wanted = searchParams.get("tab");
+    if (wanted && ["pending", "history", "returns", "cancels", "overtime"].includes(wanted)) setTab(wanted);
+  }, [searchParams]);
+  const [cancelCount, setCancelCount] = useState(0);
+  const [overtimeCount, setOvertimeCount] = useState(0);
   const [query, setQuery] = useState("");
   const [historyStatus, setHistoryStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -745,7 +760,12 @@ export function ManagerLeavePage() {
           (rt) => ({ rt, err: "" }),
           (err) => ({ rt: [] as LeaveReturnRequestDto[], err: errorMessage(err) }),
         ),
-      ]).then(([p, h, r]) => {
+        // Số yêu cầu chờ ở các tab khác: lỗi (vd thiếu quyền) thì coi như 0, không làm hỏng cả trang.
+        leaveCancelApi.getPending().then((c) => c.length, () => 0),
+        overtimeApi.getPending().then((o) => o.length, () => 0),
+      ]).then(([p, h, r, cx, ot]) => {
+        setCancelCount(cx);
+        setOvertimeCount(ot);
         setPending([...p].sort((a, b) => b.id - a.id));
         setHistory([...h].sort((a, b) => b.id - a.id));
         setReturns([...r.rt].sort((a, b) => b.id - a.id));
@@ -769,7 +789,7 @@ export function ManagerLeavePage() {
 
   // Tải lại im lặng; dialog từ chối/duyệt đang mở giữ nguyên nội dung.
   useAutoRefresh(() => (canView ? fetchAll().catch(() => undefined) : undefined), {
-    types: [...MANAGER_EVENTS, "ReturnApproved", "ReturnRejected"],
+    types: [...MANAGER_EVENTS, "ReturnApproved", "ReturnRejected", "LeaveCancelApproved", "LeaveCancelRejected", "OvertimeApproved", "OvertimeRejected"],
   });
 
   const approve = async () => {
@@ -876,8 +896,8 @@ export function ManagerLeavePage() {
             <Tab value="pending">Chờ duyệt ({pending.length})</Tab>
             <Tab value="history">Lịch sử</Tab>
             <Tab value="returns">Yêu cầu rút ngắn nghỉ phép ({returns.length})</Tab>
-            <Tab value="cancels">Hủy phép</Tab>
-            <Tab value="overtime">Làm thêm giờ</Tab>
+            <Tab value="cancels">Hủy phép{cancelCount ? ` (${cancelCount})` : ""}</Tab>
+            <Tab value="overtime">Làm thêm giờ{overtimeCount ? ` (${overtimeCount})` : ""}</Tab>
           </TabList>
         }
       />

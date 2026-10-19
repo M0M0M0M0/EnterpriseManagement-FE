@@ -11,7 +11,7 @@ import {
 import { CameraRegular } from "@fluentui/react-icons";
 import { useEffect, useRef, useState } from "react";
 
-// Hộp chụp ảnh khuôn mặt khi chấm công vào (mobile mở camera trước). Chụp xong trả về ảnh JPEG; đóng hộp thì trả null.
+// Hộp chụp ảnh khuôn mặt khi chấm công vào/ra (mobile mở camera trước). Chụp xong trả về ảnh JPEG; đóng hộp thì trả null.
 export function CameraCaptureDialog({
   open,
   onCapture,
@@ -85,7 +85,7 @@ export function CameraCaptureDialog({
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onCancel()}>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Chụp ảnh chấm công vào</DialogTitle>
+          <DialogTitle>Chụp ảnh chấm công</DialogTitle>
           <DialogContent>
             {error ? (
               <p className="field-error" role="alert">

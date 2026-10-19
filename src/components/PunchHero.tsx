@@ -133,7 +133,7 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
 
   // Lần chấm công đầu tiên trong ngày là vào ca; các lần sau là ra ca (đè giờ ra cũ), khớp PunchAsync ở backend.
   const clockedIn = Boolean(day?.checkInTime);
-  // Quá 18:00 thì khoá chấm công; đồng hồ đã chạy từng giây nên nút tự khoá đúng giờ.
+  // Quá 22:00 thì khoá chấm công; đồng hồ đã chạy từng giây nên nút tự khoá đúng giờ.
   const locked = isPunchLocked(now);
 
   const [consentOpen, setConsentOpen] = useState(false);
@@ -186,11 +186,10 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
         );
       }
 
-      let photo: Blob | undefined;
-      if (!wasClockedIn) {
-        const taken = await askPhoto();
-        if (!taken) throw new Error("Bạn chưa chụp ảnh nên chưa thể chấm công vào.");
-        photo = taken;
+      // Cả chấm công vào lẫn ra đều phải chụp ảnh.
+      const photo = await askPhoto();
+      if (!photo) {
+        throw new Error(`Bạn chưa chụp ảnh nên chưa thể chấm công ${wasClockedIn ? "ra" : "vào"}.`);
       }
 
       await attendanceApi.punchWithEvidence(position.coords.latitude, position.coords.longitude, photo);
@@ -285,7 +284,7 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
         </div>
         <p>
           {locked
-            ? "Đã quá 18:00 nên chấm công bị khoá. Nếu quên chấm công, hãy gửi yêu cầu điều chỉnh chấm công."
+            ? "Đã quá 22:00 nên chấm công bị khoá. Nếu quên chấm công, hãy gửi yêu cầu điều chỉnh chấm công."
             : clockedIn
               ? "Bấm lại để cập nhật giờ ra."
               : "Bấm để vào ca làm việc hôm nay."}
