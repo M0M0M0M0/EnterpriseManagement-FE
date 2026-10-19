@@ -60,6 +60,7 @@ const FUNCTIONAL_GROUPS: FunctionalGroupDef[] = [
       "employee.view.all",
       "leavebalance.manage",
       "timesheet.manage",
+      "timesheet.close",
       "holiday.manage",
     ],
   },

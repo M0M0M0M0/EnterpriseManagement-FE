@@ -24,10 +24,11 @@ function previousMonth() {
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
-// team = true: trang của quản lý (route /manager/timesheet), chỉ gồm cấp dưới của mình; nút chốt/mở lại bị ẩn vì thiếu quyền timesheet.manage.
+// team = true: trang của quản lý (route /manager/timesheet), chỉ gồm cấp dưới của mình; nút chốt/mở lại bị ẩn vì thiếu quyền timesheet.close.
 export function HrTimesheetPage({ team = false }: { team?: boolean } = {}) {
   const notify = useNotify();
-  const canManage = useCan()("timesheet.manage");
+  // Chốt/mở lại kỳ công chỉ dành cho trưởng bộ phận nhân sự (timesheet.close); HR khác chỉ xem và xuất file.
+  const canManage = useCan()("timesheet.close");
   const [period, setPeriod] = useState(previousMonth);
   const [sheet, setSheet] = useState<TimesheetDto | null>(null);
   const [loading, setLoading] = useState(true);

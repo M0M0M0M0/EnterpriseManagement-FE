@@ -27,7 +27,7 @@ export const holidayApi = {
   remove: (id: number) => http.delete<void>(`/holidays/${id}`),
 };
 
-// Bảng công tháng (timesheet.manage).
+// Bảng công tháng: xem/xuất cần timesheet.manage, chốt/mở lại cần timesheet.close (trưởng nhân sự).
 export const timesheetApi = {
   get: (year: number, month: number) => http.get<TimesheetDto>(`/timesheets?year=${year}&month=${month}`),
   // Bảng công của team mình (quản lý chỉ xem).
