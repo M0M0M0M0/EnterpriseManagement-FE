@@ -2533,3 +2533,100 @@ p {
 .metric-item.is-clickable:hover {
   background: var(--brand-soft);
 }
+
+/* ---- Chọn quyền theo nhóm chức năng (PermissionGroupEditor) ---- */
+.pg-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.pg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pg-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.pg-empty {
+  margin: 8px 0;
+  color: var(--text-muted);
+}
+
+.pg-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.pg-group.has-selection {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.pg-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 6px 6px;
+}
+
+.pg-group-toggle {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 4px;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pg-group-text {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pg-group-text strong {
+  font-size: 15px;
+}
+
+.pg-group-text small {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.pg-group-body {
+  display: grid;
+  gap: 12px;
+  padding: 4px 14px 14px 40px;
+  border-top: 1px solid var(--border);
+}
+
+.pg-section {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+
+.pg-section-title {
+  font-weight: 600;
+}
+
+.pg-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0 16px;
+  padding-left: 26px;
+}

@@ -1,55 +1,138 @@
-import {
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
-  Badge,
-  Button,
-  Checkbox,
-} from "@fluentui/react-components";
+import { Badge, Button, Checkbox, Input } from "@fluentui/react-components";
+import { ChevronDownRegular, ChevronRightRegular, SearchRegular } from "@fluentui/react-icons";
 import { useMemo, useState } from "react";
 import type { PermissionDto } from "../types/domain";
 import { EmptyState } from "./ui";
 
-// Gom permission theo "tính năng" (module) để hiển thị theo đúng luồng thao tác của Admin:
-// (1) chọn có được thấy menu tương ứng không (permission "page.*"), (2) mở rộng nhóm để
-// chọn tiếp các permission hành động bên trong trang đó (xem/duyệt/từ chối...).
-// Permission "page.*" của MenuSeeder dùng tên trang số nhiều/khác dạng số ít so với
-// module của ActionPermissionSeeder (vd "customers" vs "customer") nên cần alias để gộp đúng nhóm.
-const GROUP_LABELS: Record<string, string> = {
-  dashboard: "Tổng quan",
-  attendance: "Chấm công",
-  leave: "Nghỉ phép",
-  organization: "Phòng ban & chức vụ",
-  employee: "Nhân viên",
-  users: "Tài khoản đăng nhập",
-  audit: "Nhật ký hệ thống",
-  system: "Quản trị hệ thống",
-};
-
-const PAGE_KEY_ALIASES: Record<string, string> = {
-  employees: "employee",
-};
-
-function pageGroupKey(permissionCode: string): string {
-  const segments = permissionCode.split(".");
-  const last = segments[segments.length - 1] ?? permissionCode;
-  return PAGE_KEY_ALIASES[last] ?? last;
+// Gom menu (permission "page.*") và quyền hành động theo NHÓM CHỨC NĂNG, để Admin gán cho một vai trò theo cụm:
+// tick ô đầu nhóm là chọn cả nhóm, hoặc tick riêng "tất cả menu" / "tất cả chức năng" của nhóm.
+// Chỉ là cách sắp xếp hiển thị: giá trị chọn vẫn là danh sách mã quyền như trước.
+interface FunctionalGroupDef {
+  key: string;
+  label: string;
+  hint: string;
+  menus: string[];
+  actions: string[];
 }
 
-const PAGE_SCOPE_LABELS: Record<string, string> = {
-  employee: "Nhân viên",
-  manager: "Quản lý",
-  admin: "Quản trị",
+const FUNCTIONAL_GROUPS: FunctionalGroupDef[] = [
+  {
+    key: "employee",
+    label: "Nhân viên cơ bản (ai cũng có)",
+    hint: "Chấm công, xem lịch sử chấm công của mình, xin điều chỉnh công, xin nghỉ phép.",
+    menus: ["page.employee.dashboard", "page.employee.attendance", "page.employee.leave"],
+    actions: ["attendance.punch", "attendance.adjustment.self", "leave.request.self"],
+  },
+  {
+    key: "manager",
+    label: "Quản lý (trưởng nhóm, trưởng phòng)",
+    hint: "Xem nhân viên và chấm công của team, duyệt đơn nghỉ phép, xác nhận điều chỉnh công, cây tổ chức.",
+    menus: [
+      "page.manager.dashboard",
+      "page.manager.employees",
+      "page.manager.attendance",
+      "page.manager.leave",
+      "page.manager.organization",
+      "page.manager.orgtree",
+    ],
+    actions: [
+      "dashboard.view.team",
+      "employee.view.team",
+      "attendance.view.team",
+      "attendance.adjustment.view",
+      "attendance.adjustment.approve",
+      "leave.request.view",
+      "leave.request.approve",
+    ],
+  },
+  {
+    key: "hr",
+    label: "Nhân sự (HR)",
+    hint: "Chấm công toàn công ty, ghi nhận ngoại lệ, xử lý điều chỉnh công và đi làm lại, cấp lại số ngày nghỉ.",
+    menus: ["page.hr.attendance", "page.hr.attendance-notes", "page.hr.adjustments", "page.hr.leave-returns"],
+    actions: ["attendance.view.all", "attendance.note.manage", "attendance.adjustment.apply", "employee.view.all", "leavebalance.manage"],
+  },
+  {
+    key: "admin",
+    label: "Quản trị hệ thống (Admin)",
+    hint: "Quản lý nhân viên và tài khoản, phòng ban, chức vụ, loại nghỉ, vai trò, quyền, menu và nhật ký hệ thống.",
+    menus: [
+      "page.admin.employees",
+      "page.admin.departments",
+      "page.admin.positions",
+      "page.admin.leavetypes",
+      "page.admin.audit",
+      "page.admin.system",
+    ],
+    actions: [
+      "employee.manage",
+      "user.manage",
+      "department.manage",
+      "position.manage",
+      "leavetype.manage",
+      "role.manage",
+      "permission.manage",
+      "menu.manage",
+      "audit.view",
+    ],
+  },
+];
+
+const OTHER_GROUP: Pick<FunctionalGroupDef, "key" | "label" | "hint"> = {
+  key: "other",
+  label: "Khác",
+  hint: "Các quyền chưa thuộc nhóm nào ở trên (ví dụ quyền mới được thêm sau).",
 };
 
-// Nhiều permission "page.*" có thể trùng permissionName (vd "Audit Log" của cả
-// page.admin.audit lẫn page.manager.audit), nên cần ghi thêm phạm vi (đoạn giữa
-// của code, vd "admin"/"manager") để 2 checkbox không nhìn y hệt nhau.
-function pagePermissionLabel(permission: PermissionDto): string {
-  const segments = permission.permissionCode.split(".");
-  const scope = segments.length === 3 ? PAGE_SCOPE_LABELS[segments[1]] : undefined;
-  return scope ? `${permission.permissionName} (${scope})` : permission.permissionName;
+// Quyền/menu mới chưa có trong danh sách trên vẫn được xếp đúng nhóm theo tiền tố của mã trang.
+const PAGE_PREFIX_GROUP: Record<string, string> = {
+  "page.employee.": "employee",
+  "page.manager.": "manager",
+  "page.hr.": "hr",
+  "page.admin.": "admin",
+};
+
+export interface PermissionGroup {
+  key: string;
+  label: string;
+  hint: string;
+  menus: PermissionDto[];
+  actions: PermissionDto[];
+}
+
+export function buildPermissionGroups(permissions: PermissionDto[]): PermissionGroup[] {
+  const groups: PermissionGroup[] = [
+    ...FUNCTIONAL_GROUPS.map((g) => ({ key: g.key, label: g.label, hint: g.hint, menus: [] as PermissionDto[], actions: [] as PermissionDto[] })),
+    { ...OTHER_GROUP, menus: [], actions: [] },
+  ];
+  const byKey = new Map(groups.map((g) => [g.key, g]));
+  const explicit = new Map<string, string>();
+  for (const def of FUNCTIONAL_GROUPS) {
+    for (const code of [...def.menus, ...def.actions]) explicit.set(code, def.key);
+  }
+
+  for (const permission of permissions) {
+    const code = permission.permissionCode;
+    const isMenu = permission.module === "page" || code.startsWith("page.");
+    let key = explicit.get(code);
+    if (!key && isMenu) {
+      key = Object.entries(PAGE_PREFIX_GROUP).find(([prefix]) => code.startsWith(prefix))?.[1];
+    }
+    const group = byKey.get(key ?? OTHER_GROUP.key)!;
+    (isMenu ? group.menus : group.actions).push(permission);
+  }
+
+  // Thứ tự trong nhóm theo đúng thứ tự khai báo ở trên (cho menu/quyền đã biết), phần còn lại theo tên.
+  const order = new Map<string, number>();
+  FUNCTIONAL_GROUPS.forEach((def) => [...def.menus, ...def.actions].forEach((code, i) => order.set(code, i)));
+  const sorter = (a: PermissionDto, b: PermissionDto) =>
+    (order.get(a.permissionCode) ?? 999) - (order.get(b.permissionCode) ?? 999) || a.permissionName.localeCompare(b.permissionName);
+  for (const group of groups) {
+    group.menus.sort(sorter);
+    group.actions.sort(sorter);
+  }
+
+  return groups.filter((g) => g.menus.length || g.actions.length);
 }
 
 // Nhãn checkbox kèm mã quyền nhỏ bên dưới (giống mobile).
@@ -62,34 +145,12 @@ function permissionLabel(name: string, code: string) {
   );
 }
 
-export interface PermissionGroup {
-  key: string;
-  label: string;
-  pagePermissions: PermissionDto[];
-  actionPermissions: PermissionDto[];
-}
+type TriState = boolean | "mixed";
 
-export function buildPermissionGroups(permissions: PermissionDto[]): PermissionGroup[] {
-  const groups = new Map<string, PermissionGroup>();
-
-  const ensureGroup = (key: string) => {
-    let group = groups.get(key);
-    if (!group) {
-      group = { key, label: GROUP_LABELS[key] ?? key, pagePermissions: [], actionPermissions: [] };
-      groups.set(key, group);
-    }
-    return group;
-  };
-
-  for (const permission of permissions) {
-    if (permission.module === "page") {
-      ensureGroup(pageGroupKey(permission.permissionCode)).pagePermissions.push(permission);
-    } else {
-      ensureGroup(permission.module).actionPermissions.push(permission);
-    }
-  }
-
-  return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+function triState(items: PermissionDto[], selected: Set<string>): TriState {
+  const count = items.filter((p) => selected.has(p.permissionCode)).length;
+  if (count === 0) return false;
+  return count === items.length ? true : "mixed";
 }
 
 export function PermissionGroupEditor({
@@ -103,87 +164,113 @@ export function PermissionGroupEditor({
 }) {
   const groups = useMemo(() => buildPermissionGroups(permissions), [permissions]);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-  // Mặc định thu gọn hết để form ngắn; người dùng mở từng nhóm hoặc mở/thu gọn tất cả.
-  const [openItems, setOpenItems] = useState<string[]>([]);
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
 
   if (!groups.length) {
     return <EmptyState title="Chưa có quyền nào." description="Tạo quyền trước khi gán cho vai trò." />;
   }
 
-  const toggle = (code: string, checked: boolean) => {
+  const setMany = (items: PermissionDto[], checked: boolean) => {
     const next = new Set(selectedSet);
-    if (checked) {
-      next.add(code);
-    } else {
-      next.delete(code);
+    for (const p of items) {
+      if (checked) next.add(p.permissionCode);
+      else next.delete(p.permissionCode);
     }
     onChange(Array.from(next));
   };
 
+  // Ô tick của cả nhóm/phần: đã chọn hết thì bỏ chọn hết, ngược lại chọn hết.
+  const toggleMany = (items: PermissionDto[]) => setMany(items, triState(items, selectedSet) !== true);
+
+  const q = query.trim().toLowerCase();
+  const matches = (p: PermissionDto) =>
+    !q || p.permissionName.toLowerCase().includes(q) || p.permissionCode.toLowerCase().includes(q);
+
+  const isOpen = (key: string) => openKeys.includes(key) || Boolean(q);
+  const toggleOpen = (key: string) =>
+    setOpenKeys((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const renderSection = (title: string, items: PermissionDto[]) => {
+    const visible = items.filter(matches);
+    if (!visible.length) return null;
+    return (
+      <div className="pg-section">
+        <Checkbox
+          className="pg-section-title"
+          label={`${title} (${items.filter((p) => selectedSet.has(p.permissionCode)).length}/${items.length})`}
+          checked={triState(items, selectedSet)}
+          onChange={() => toggleMany(items)}
+        />
+        <div className="pg-items">
+          {visible.map((permission) => (
+            <Checkbox
+              key={permission.permissionCode}
+              label={permissionLabel(permission.permissionName, permission.permissionCode)}
+              checked={selectedSet.has(permission.permissionCode)}
+              onChange={(_, data) => setMany([permission], Boolean(data.checked))}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const visibleGroups = groups.filter((g) => [...g.menus, ...g.actions].some(matches));
+
   return (
-    <>
-    <div className="table-actions">
-      <Button size="small" onClick={() => setOpenItems(groups.map((group) => group.key))}>
-        Mở rộng tất cả
-      </Button>
-      <Button size="small" onClick={() => setOpenItems([])}>
-        Thu gọn tất cả
-      </Button>
-    </div>
-    <Accordion
-      multiple
-      collapsible
-      openItems={openItems}
-      onToggle={(_, data) => setOpenItems(data.openItems as string[])}
-    >
-      {groups.map((group) => {
-        const groupPermissions = [...group.pagePermissions, ...group.actionPermissions];
-        const checkedCount = groupPermissions.filter((p) => selectedSet.has(p.permissionCode)).length;
+    <div className="pg-editor">
+      <div className="pg-toolbar">
+        <Input
+          className="pg-search"
+          contentBefore={<SearchRegular />}
+          placeholder="Tìm menu hoặc quyền..."
+          value={query}
+          onChange={(_, data) => setQuery(data.value)}
+        />
+        <Button size="small" onClick={() => setOpenKeys(groups.map((g) => g.key))}>
+          Mở rộng tất cả
+        </Button>
+        <Button size="small" onClick={() => setOpenKeys([])}>
+          Thu gọn tất cả
+        </Button>
+      </div>
+
+      {visibleGroups.length === 0 ? <p className="pg-empty">Không có menu hoặc quyền nào khớp "{query}".</p> : null}
+
+      {visibleGroups.map((group) => {
+        const all = [...group.menus, ...group.actions];
+        const checkedCount = all.filter((p) => selectedSet.has(p.permissionCode)).length;
+        const open = isOpen(group.key);
 
         return (
-          <AccordionItem key={group.key} value={group.key}>
-            <AccordionHeader>
-              <span className="permission-group-title">
-                {group.label}
+          <section className={`pg-group${checkedCount > 0 ? " has-selection" : ""}`} key={group.key}>
+            <header className="pg-group-header">
+              <Checkbox
+                checked={triState(all, selectedSet)}
+                onChange={() => toggleMany(all)}
+                aria-label={`Chọn tất cả: ${group.label}`}
+              />
+              <button type="button" className="pg-group-toggle" onClick={() => toggleOpen(group.key)} aria-expanded={open}>
+                <span className="pg-group-text">
+                  <strong>{group.label}</strong>
+                  <small>{group.hint}</small>
+                </span>
                 <Badge appearance="tint" color={checkedCount > 0 ? "brand" : "informative"} size="small">
-                  {checkedCount}/{groupPermissions.length}
+                  {checkedCount}/{all.length}
                 </Badge>
-              </span>
-            </AccordionHeader>
-            <AccordionPanel>
-              <div className="permission-group-panel">
-                {group.pagePermissions.length ? (
-                  <div className="permission-group-section">
-                    <span className="permission-group-section-title">Xem menu</span>
-                    {group.pagePermissions.map((permission) => (
-                      <Checkbox
-                        key={permission.permissionCode}
-                        label={permissionLabel(pagePermissionLabel(permission), permission.permissionCode)}
-                        checked={selectedSet.has(permission.permissionCode)}
-                        onChange={(_, data) => toggle(permission.permissionCode, Boolean(data.checked))}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                {group.actionPermissions.length ? (
-                  <div className="permission-group-section">
-                    <span className="permission-group-section-title">Hành động trong trang</span>
-                    {group.actionPermissions.map((permission) => (
-                      <Checkbox
-                        key={permission.permissionCode}
-                        label={permissionLabel(permission.permissionName, permission.permissionCode)}
-                        checked={selectedSet.has(permission.permissionCode)}
-                        onChange={(_, data) => toggle(permission.permissionCode, Boolean(data.checked))}
-                      />
-                    ))}
-                  </div>
-                ) : null}
+                {open ? <ChevronDownRegular /> : <ChevronRightRegular />}
+              </button>
+            </header>
+            {open ? (
+              <div className="pg-group-body">
+                {renderSection("Menu hiển thị (các trang)", group.menus)}
+                {renderSection("Chức năng (hành động trong trang)", group.actions)}
               </div>
-            </AccordionPanel>
-          </AccordionItem>
+            ) : null}
+          </section>
         );
       })}
-    </Accordion>
-    </>
+    </div>
   );
 }
