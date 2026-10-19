@@ -2525,3 +2525,11 @@ p {
   box-shadow: none;
   opacity: 1;
 }
+
+.metric-item.is-clickable {
+  cursor: pointer;
+}
+
+.metric-item.is-clickable:hover {
+  background: var(--brand-soft);
+}

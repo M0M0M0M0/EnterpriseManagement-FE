@@ -240,6 +240,8 @@ export interface MetricItem {
   value: string | number;
   detail?: string;
   tone?: "brand" | "success" | "warning" | "danger";
+  // Có thì thẻ số liệu bấm được (hiện con trỏ tay, phím Enter/Space cũng mở được).
+  onClick?: () => void;
 }
 
 export function MetricRail({ items }: { items: MetricItem[] }) {
@@ -247,8 +249,21 @@ export function MetricRail({ items }: { items: MetricItem[] }) {
     <section className="metric-rail" aria-label="Chỉ số tổng quan">
       {items.map((item) => (
         <div
-          className={`metric-item metric-${item.tone ?? "brand"}`}
+          className={`metric-item metric-${item.tone ?? "brand"}${item.onClick ? " is-clickable" : ""}`}
           key={item.label}
+          {...(item.onClick
+            ? {
+                role: "button",
+                tabIndex: 0,
+                onClick: item.onClick,
+                onKeyDown: (e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    item.onClick?.();
+                  }
+                },
+              }
+            : {})}
         >
           <span>{item.label}</span>
           <strong>{item.value}</strong>

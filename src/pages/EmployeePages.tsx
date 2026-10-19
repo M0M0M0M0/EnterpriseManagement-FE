@@ -108,13 +108,16 @@ function shortName(full: string) {
   return parts[parts.length - 1] ?? "";
 }
 
-// Thẻ "Tình trạng nghỉ phép": số dư từng loại (3 dòng đầu), bấm "Xem chi tiết" để xem đủ kèm phân loại có lương/không lương.
-function LeaveStatusCard({ employeeCode }: { employeeCode: string }) {
+// Hộp "Chi tiết tình trạng nghỉ phép": số dư từng loại kèm phân loại có lương/không lương.
+// Mở từ thẻ "Ngày phép còn lại" ở trang Xin nghỉ phép; chỉ tải dữ liệu khi mở.
+function LeaveStatusDialog({ employeeCode, open, onClose }: { employeeCode: string; open: boolean; onClose: () => void }) {
   const [balances, setBalances] = useState<LeaveBalanceDto[]>([]);
   const [paidByCode, setPaidByCode] = useState<Record<string, boolean>>({});
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const load = () =>
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
     Promise.all([
       leaveBalanceApi.getByEmployee(employeeCode, new Date().getFullYear()),
       leaveTypeApi.getAll().catch(() => [] as LeaveTypeDto[]),
@@ -123,42 +126,22 @@ function LeaveStatusCard({ employeeCode }: { employeeCode: string }) {
         setBalances(b);
         setPaidByCode(Object.fromEntries(t.map((type) => [type.leaveTypeCode, type.isPaid])));
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, [open, employeeCode]);
 
-  useEffect(() => {
-    void load();
-  }, [employeeCode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useAutoRefresh(load, { types: ["LeaveApproved", "LeaveRejected", "ReturnApproved", "LeaveSubmitted"] });
-
-  if (!balances.length) return null;
   const value = (b: LeaveBalanceDto) => formatLeaveTime(b.remainingTime, b.unit);
   const category = (b: LeaveBalanceDto) => ((paidByCode[b.leaveTypeCode] ?? true) ? "Nghỉ có lương" : "Nghỉ không lương");
 
   return (
-    <SectionPanel
-      title="Tình trạng nghỉ phép"
-      action={
-        <Button size="small" appearance="subtle" onClick={() => setDetailOpen(true)}>
-          Xem chi tiết
-        </Button>
-      }
-    >
-      <div className="compact-list">
-        {balances.slice(0, 3).map((b) => (
-          <div className="compact-row" key={`${b.leaveTypeCode}-${b.month ?? "y"}`}>
-            <div>
-              <strong>{b.leaveTypeName}</strong>
-            </div>
-            <span>{value(b)}</span>
-          </div>
-        ))}
-      </div>
-      <Dialog open={detailOpen} onOpenChange={(_, data) => setDetailOpen(data.open)}>
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>Chi tiết tình trạng nghỉ phép</DialogTitle>
-            <DialogContent>
+    <Dialog open={open} onOpenChange={(_, data) => !data.open && onClose()}>
+      <DialogSurface>
+        <DialogBody>
+          <DialogTitle>Chi tiết tình trạng nghỉ phép</DialogTitle>
+          <DialogContent>
+            {loading ? (
+              <Spinner size="small" label="Đang tải..." />
+            ) : balances.length ? (
               <div className="compact-list">
                 {balances.map((b) => (
                   <div className="compact-row" key={`${b.leaveTypeCode}-${b.month ?? "y"}`}>
@@ -170,16 +153,18 @@ function LeaveStatusCard({ employeeCode }: { employeeCode: string }) {
                   </div>
                 ))}
               </div>
-            </DialogContent>
-            <DialogActions>
-              <Button appearance="primary" onClick={() => setDetailOpen(false)}>
-                Đóng
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
-    </SectionPanel>
+            ) : (
+              <p>Chưa có thông tin số dư nghỉ phép.</p>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button appearance="primary" onClick={onClose}>
+              Đóng
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   );
 }
 
@@ -247,7 +232,6 @@ export function EmployeeDashboardPage() {
         ]}
       />
 
-      <LeaveStatusCard employeeCode={employeeCode} />
     </div>
   );
 }
@@ -677,6 +661,7 @@ export function EmployeeLeavePage() {
   const [cancelTarget, setCancelTarget] = useState<LeaveRequestDto | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const employeeCode = useEmployeeCode();
+  const [statusOpen, setStatusOpen] = useState(false);
 
   // Nghỉ có phép phải xin trước ít nhất 1 ngày làm việc để quản lý kịp duyệt và sắp xếp
   // công việc: xin trước/đúng 17h thì sớm nhất là ngày mai, xin sau 17h thì sớm nhất là
@@ -832,7 +817,6 @@ export function EmployeeLeavePage() {
   };
 
   const remainingDays = balances.filter((b) => b.unit === "Days").reduce((sum, b) => sum + b.remainingTime, 0);
-  const shortLeaveBalance = balances.find((b) => b.unit === "Hours");
   const pending = requests.filter((r) => r.status === "Pending").length;
 
   const filteredRequests = requests.filter(
@@ -841,6 +825,9 @@ export function EmployeeLeavePage() {
 
   return (
     <div className="page-stack">
+      {employeeCode ? (
+        <LeaveStatusDialog employeeCode={employeeCode} open={statusOpen} onClose={() => setStatusOpen(false)} />
+      ) : null}
       <PageHeader
         title="Xin nghỉ phép"
         description="Tạo đơn nghỉ, theo dõi trạng thái và số dư còn lại."
@@ -863,14 +850,13 @@ export function EmployeeLeavePage() {
         <>
           <MetricRail
             items={[
-              { label: "Ngày phép còn lại", value: `${formatNumber(remainingDays)} ngày`, tone: "brand" },
-              shortLeaveBalance
-                ? {
-                    label: "Nghỉ ngắn tháng này",
-                    value: formatLeaveTime(shortLeaveBalance.remainingTime, shortLeaveBalance.unit),
-                    tone: "brand",
-                  }
-                : { label: "Nghỉ ngắn tháng này", value: "--", tone: "brand" },
+              {
+                label: "Ngày phép còn lại",
+                value: `${formatNumber(remainingDays)} ngày`,
+                detail: "Bấm để xem chi tiết",
+                tone: "brand",
+                onClick: () => setStatusOpen(true),
+              },
               { label: "Đang chờ duyệt", value: pending, tone: pending ? "warning" : "success" },
             ]}
           />
