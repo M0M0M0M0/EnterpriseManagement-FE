@@ -144,9 +144,11 @@ export function HrTimesheetPage({ team = false }: { team?: boolean } = {}) {
           ) : null}
         </div>
       </SectionPanel>
-      <Field label="Tìm kiếm">
-        <Input value={search} onChange={(_, data) => setSearch(data.value)} placeholder="Tìm theo tên / mã nhân viên" />
-      </Field>
+      <div className="filter-grid">
+        <Field label="Tìm kiếm">
+          <Input value={search} onChange={(_, data) => setSearch(data.value)} placeholder="Tìm theo tên / mã nhân viên" />
+        </Field>
+      </div>
       {loading && !sheet ? (
         <Spinner label="Đang tải..." />
       ) : error && !sheet ? (

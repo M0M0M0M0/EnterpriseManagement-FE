@@ -2670,3 +2670,104 @@ p {
   color: var(--text-muted);
   font-size: 12px;
 }
+
+/* ===== Bố cục form và bộ lọc: không kéo dài hết chiều ngang màn hình ===== */
+.filter-grid,
+.attendance-filters,
+.employee-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 16px;
+  align-items: flex-end;
+}
+
+.filter-grid > *,
+.attendance-filters > *,
+.employee-filters > * {
+  flex: 1 1 190px;
+  min-width: 0;
+  max-width: 240px;
+}
+
+/* Ô tìm kiếm đứng đầu rộng hơn một chút cho dễ gõ */
+.filter-grid > :first-child:has(input[type="text"], input:not([type])),
+.employee-filters > :first-child {
+  flex-basis: 280px;
+  max-width: 340px;
+}
+
+.form-stack {
+  width: 100%;
+  max-width: 520px;
+}
+
+.section-panel:has(> .form-stack),
+.section-panel:has(> .form-grid),
+.section-panel:has(> .privacy-text) {
+  max-width: 760px;
+}
+
+.form-grid {
+  gap: 14px 16px;
+}
+
+/* Hộp thoại giữ độ rộng của chính nó */
+.fui-DialogContent.form-stack {
+  max-width: none;
+}
+
+@media (max-width: 820px) {
+  .filter-grid > *,
+  .attendance-filters > *,
+  .employee-filters > *,
+  .filter-grid > :first-child:has(input[type="text"], input:not([type])) {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .form-stack,
+  .section-panel:has(> .form-stack),
+  .section-panel:has(> .form-grid) {
+    max-width: none;
+  }
+}
+
+/* ===== Chống tràn ngang: lưới trang co được, bảng tự cuộn trong khung, tiêu đề trang xuống dòng ===== */
+.page-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.enterprise-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.page-header {
+  flex-wrap: wrap;
+}
+
+.page-header > div:first-child {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.page-actions {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.page-actions .fui-TabList {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Nút thao tác trên từng dòng bảng xuống dòng thay vì kéo giãn bảng */
+.row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 150px;
+  max-width: 230px;
+  margin-left: auto;
+}
