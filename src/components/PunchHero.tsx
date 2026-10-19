@@ -12,7 +12,9 @@ import type { AttendanceCalendarDayDto } from "../types/attendanceHr";
 import type { OfficeLocationDto } from "../types/domain";
 import { formatTime, isoDate } from "../utils/format";
 import { isPunchLocked } from "../utils/punchLock";
+import { privacyApi } from "../services/privacyApi";
 import { CameraCaptureDialog } from "./CameraCaptureDialog";
+import { PrivacyConsentDialog } from "./PrivacyConsentDialog";
 import { useNotify } from "./useNotify";
 
 const GOAL_HOURS = 8;
@@ -134,6 +136,22 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
   // Quá 18:00 thì khoá chấm công; đồng hồ đã chạy từng giây nên nút tự khoá đúng giờ.
   const locked = isPunchLocked(now);
 
+  const [consentOpen, setConsentOpen] = useState(false);
+  const [consentBusy, setConsentBusy] = useState(false);
+
+  const agreeConsent = async () => {
+    setConsentBusy(true);
+    try {
+      await privacyApi.accept();
+      setConsentOpen(false);
+      void punch();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err) });
+    } finally {
+      setConsentBusy(false);
+    }
+  };
+
   const askPhoto = () =>
     new Promise<Blob | null>((resolve) => {
       cameraResolver.current = resolve;
@@ -151,6 +169,13 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
     const wasClockedIn = clockedIn;
     setPunching(true);
     try {
+      // Lần đầu (hoặc khi chính sách đổi) phải đồng ý thu thập vị trí/ảnh trước khi chấm công.
+      const consent = await privacyApi.getConsent();
+      if (!consent.accepted) {
+        setConsentOpen(true);
+        return;
+      }
+
       const position = await getPosition();
       const target = office ?? (await attendanceApi.getOfficeLocation());
       if (!office) setOffice(target);
@@ -271,6 +296,7 @@ export function PunchHero({ employeeCode, onPunched }: { employeeCode: string; o
           </p>
         ) : null}
       </div>
+      <PrivacyConsentDialog open={consentOpen} busy={consentBusy} onAgree={agreeConsent} onDecline={() => setConsentOpen(false)} />
       <CameraCaptureDialog open={cameraOpen} onCapture={closeCamera} onCancel={() => closeCamera(null)} />
     </section>
   );

@@ -2645,3 +2645,17 @@ p {
   align-items: center;
   gap: 10px 14px;
 }
+
+/* Tiêu đề nhóm trong thanh bên */
+.side-nav .nav-group-title {
+  margin: 14px 12px 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.side-nav .nav-group-title:first-child {
+  margin-top: 4px;
+}

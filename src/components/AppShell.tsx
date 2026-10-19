@@ -29,7 +29,7 @@ import {
   SignOutRegular,
   SquareRegular,
 } from "@fluentui/react-icons";
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/useAuthStore";
 import { useMenuStore } from "../store/useMenuStore";
@@ -42,25 +42,41 @@ interface NavItem {
   label: string;
   icon: ReactNode;
   end?: boolean;
+  // Nhóm hiển thị trong thanh bên (chỉ có khi tài khoản có từ hai nhóm trở lên).
+  group?: string;
 }
+
+// Nhóm menu theo khu vực của route, cùng thứ tự với màn Tiện ích của mobile: việc cá nhân trước, rồi quản lý, nhân sự, quản trị.
+const NAV_GROUPS: { prefix: string; label: string }[] = [
+  { prefix: "/employee/", label: "Cá nhân" },
+  { prefix: "/manager/", label: "Quản lý" },
+  { prefix: "/hr/", label: "Nhân sự" },
+  { prefix: "/admin/", label: "Quản trị" },
+];
+
+function groupRank(route: string) {
+  const index = NAV_GROUPS.findIndex((g) => route.startsWith(g.prefix));
+  return index === -1 ? NAV_GROUPS.length : index;
+}
+
 
 const navByRole: Record<UserRole, NavItem[]> = {
   employee: [
     { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
-    { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
+    { to: "/employee/attendance", label: "Chấm công của tôi", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
     { to: "/employee/overtime", label: "Làm thêm giờ", icon: <ClockRegular /> },
   ],
   hr: [
     { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
-    { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
+    { to: "/employee/attendance", label: "Chấm công của tôi", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
     { to: "/employee/overtime", label: "Làm thêm giờ", icon: <ClockRegular /> },
   ],
   manager: [
     { to: "/manager/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
     { to: "/manager/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
-    { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
+    { to: "/employee/attendance", label: "Chấm công của tôi", icon: <ClockRegular /> },
     { to: "/manager/attendance", label: "Quản lý chấm công", icon: <ClockRegular /> },
     { to: "/manager/leave", label: "Duyệt đơn từ", icon: <DocumentBulletListRegular /> },
     { to: "/manager/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
@@ -111,6 +127,7 @@ function pageTitleFor(pathname: string, items: NavItem[]) {
 }
 
 function NavContent({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
+  const showGroups = new Set(items.map((item) => item.group).filter(Boolean)).size >= 2;
   return (
     <>
       <div className="brand-lockup">
@@ -123,11 +140,16 @@ function NavContent({ items, onNavigate }: { items: NavItem[]; onNavigate?: () =
         </div>
       </div>
       <nav className="side-nav" aria-label="Điều hướng chính">
-        {items.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.end} onClick={onNavigate}>
-            {item.icon}
-            <span>{item.label}</span>
-          </NavLink>
+        {items.map((item, index) => (
+          <Fragment key={item.to}>
+            {showGroups && item.group && item.group !== items[index - 1]?.group ? (
+              <span className="nav-group-title">{item.group}</span>
+            ) : null}
+            <NavLink to={item.to} end={item.end} onClick={onNavigate}>
+              {item.icon}
+              <span>{item.label}</span>
+            </NavLink>
+          </Fragment>
         ))}
       </nav>
     </>
@@ -155,12 +177,13 @@ export function AppShell() {
     menuStatus === "loaded" && menus
       ? menus
           .filter((menu) => menu.route !== "/admin/users") // menu "Tài khoản" cũ đã gộp vào Quản lý nhân viên
-          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .sort((a, b) => groupRank(a.route) - groupRank(b.route) || a.displayOrder - b.displayOrder)
           .map((menu, index) => ({
             to: menu.route,
             label: menu.menuName,
             icon: resolveIcon(menu.icon),
             end: index === 0,
+            group: NAV_GROUPS[groupRank(menu.route)]?.label,
           }))
       : null; // Menu chưa tải xong hoặc API lỗi -> giữ nav tĩnh theo role để không bao giờ mất điều hướng.
 
