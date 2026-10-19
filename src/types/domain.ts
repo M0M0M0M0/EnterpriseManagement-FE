@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "manager" | "employee";
+export type UserRole = "admin" | "manager" | "hr" | "employee";
 
 export type RequestStatus =
   | "PENDING"
@@ -154,6 +154,11 @@ export interface AttendanceRecordDto {
   leaveTypeName?: string;
   morningNote?: string;
   afternoonNote?: string;
+  isWeekend?: boolean;
+  isHoliday?: boolean;
+  holidayName?: string;
+  // Số phút làm thêm giờ đã được duyệt trong ngày.
+  overtimeMinutes?: number;
 }
 
 export interface AttendanceAdjustmentDto {

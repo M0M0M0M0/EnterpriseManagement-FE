@@ -27,6 +27,16 @@ const EmployeeLeavePage = lazy(() =>
   import("./pages/EmployeePages").then((m) => ({ default: m.EmployeeLeavePage })),
 );
 
+const EmployeeOvertimePage = lazy(() =>
+  import("./pages/OvertimePages").then((m) => ({ default: m.EmployeeOvertimePage })),
+);
+const HrTimesheetPage = lazy(() =>
+  import("./pages/TimesheetPages").then((m) => ({ default: m.HrTimesheetPage })),
+);
+const HrHolidaysPage = lazy(() =>
+  import("./pages/TimesheetPages").then((m) => ({ default: m.HrHolidaysPage })),
+);
+
 const ManagerDashboardPage = lazy(() =>
   import("./pages/ManagerPages").then((m) => ({ default: m.ManagerDashboardPage })),
 );
@@ -126,7 +136,7 @@ function RouteLoading() {
 function AppRedirect() {
   const role = useAuthStore((state) => state.role);
   if (!role) return <Navigate to="/login" replace />;
-  if (role === "employee") return <Navigate to="/employee/dashboard" replace />;
+  if (role === "employee" || role === "hr") return <Navigate to="/employee/dashboard" replace />;
   if (role === "manager") return <Navigate to="/manager/dashboard" replace />;
   return <Navigate to="/admin/employees" replace />;
 }
@@ -139,6 +149,7 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/employee/dashboard", element: <EmployeeDashboardPage /> },
   { path: "/employee/attendance", element: <EmployeeAttendancePage /> },
   { path: "/employee/leave", element: <EmployeeLeavePage /> },
+  { path: "/employee/overtime", element: <EmployeeOvertimePage /> },
   { path: "/manager/dashboard", element: <ManagerDashboardPage /> },
   { path: "/manager/employees", element: <ManagerEmployeesPage /> },
   { path: "/manager/attendance", element: <ManagerAttendancePage /> },
@@ -149,6 +160,8 @@ const businessRoutes: { path: string; element: ReactNode }[] = [
   { path: "/hr/attendance-notes", element: <HrAttendanceNotesPage /> },
   { path: "/hr/adjustments", element: <HrAdjustmentsPage /> },
   { path: "/hr/leave-returns", element: <HrLeaveReturnsPage /> },
+  { path: "/hr/timesheet", element: <HrTimesheetPage /> },
+  { path: "/hr/holidays", element: <HrHolidaysPage /> },
   { path: "/admin/employees", element: <AdminEmployeesPage /> },
   { path: "/admin/departments", element: <AdminDepartmentsPage /> },
   { path: "/admin/positions", element: <AdminPositionsPage /> },

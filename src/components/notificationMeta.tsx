@@ -25,6 +25,12 @@ const PURPLE = "#7e57c2";
 // Icon + màu theo loại thông báo, khớp _styleOf bên mobile.
 export function notificationStyle(type: string): { icon: ReactNode; color: string } {
   switch (type) {
+    case "OvertimeSubmitted":
+      return { icon: <ClockRegular />, color: BLUE };
+    case "OvertimeApproved":
+      return { icon: <CheckmarkCircleRegular />, color: GREEN };
+    case "OvertimeRejected":
+      return { icon: <DismissCircleRegular />, color: RED };
     case "LeaveSubmitted":
       return { icon: <AirplaneRegular />, color: BLUE };
     case "LeaveApproved":

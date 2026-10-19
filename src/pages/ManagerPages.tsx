@@ -41,6 +41,7 @@ import {
   positionApi,
 } from "../services/api";
 import { leaveReturnApi } from "../services/hrApi";
+import { OvertimeApprovalPanel } from "./OvertimePages";
 import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
 import type { LeaveReturnRequestDto } from "../types/attendanceHr";
@@ -74,6 +75,7 @@ function useManagerCode() {
 
 // Loại sự kiện làm tải lại im lặng (khớp NotificationTypes.manager của mobile).
 const MANAGER_EVENTS = [
+  "OvertimeSubmitted",
   "LeaveSubmitted",
   "ReturnSubmitted",
   "AdjustmentSubmitted",
@@ -708,6 +710,7 @@ export function ManagerLeavePage() {
   const can = useCan();
   const canView = can("leave.request.view");
   const canApprove = can("leave.request.approve");
+  const canOvertimeView = can("overtime.request.view");
   const [pending, setPending] = useState<LeaveRequestDto[]>([]);
   const [history, setHistory] = useState<LeaveRequestDto[]>([]);
   const [tab, setTab] = useState("pending");
@@ -836,7 +839,7 @@ export function ManagerLeavePage() {
   if (!canView) {
     return (
       <div className="page-stack">
-        <PageHeader title="Duyệt đơn xin nghỉ" description="Xem và xử lý đơn nghỉ phép của nhân viên." />
+        <PageHeader title="Duyệt đơn từ" description="Xem và xử lý đơn nghỉ phép, đi làm lại và làm thêm giờ của nhân viên." />
         <EmptyState title="Không có quyền" description="Bạn không có quyền xem đơn nghỉ phép của nhân viên." />
       </div>
     );
@@ -859,17 +862,18 @@ export function ManagerLeavePage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Duyệt đơn xin nghỉ"
-        description="Xem và xử lý đơn nghỉ phép của nhân viên."
+        title="Duyệt đơn từ"
+        description="Xem và xử lý đơn nghỉ phép, đi làm lại và làm thêm giờ của nhân viên."
         action={
           <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
             <Tab value="pending">Chờ duyệt ({pending.length})</Tab>
             <Tab value="history">Lịch sử</Tab>
             <Tab value="returns">Yêu cầu đi làm lại ({returns.length})</Tab>
+            <Tab value="overtime">Làm thêm giờ</Tab>
           </TabList>
         }
       />
-      {tab !== "returns" ? (
+      {tab !== "returns" && tab !== "overtime" ? (
         <div className="filter-grid">
           <Field label="Tìm kiếm">
             <Input
@@ -888,7 +892,13 @@ export function ManagerLeavePage() {
           ) : null}
         </div>
       ) : null}
-      {loading && !pending.length && !history.length ? (
+      {tab === "overtime" ? (
+        canOvertimeView ? (
+          <OvertimeApprovalPanel />
+        ) : (
+          <EmptyState title="Không có quyền" description="Bạn không có quyền xem đơn làm thêm giờ của nhân viên." />
+        )
+      ) : loading && !pending.length && !history.length ? (
         <Spinner label="Đang tải..." />
       ) : error && !pending.length && !history.length ? (
         <RetryError message={error} onRetry={load} />

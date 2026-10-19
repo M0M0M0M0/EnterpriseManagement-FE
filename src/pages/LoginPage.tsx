@@ -13,7 +13,7 @@ import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
 
 function homePathForRole(role: string | null) {
-  if (role === "employee") return "/employee/dashboard";
+  if (role === "employee" || role === "hr") return "/employee/dashboard";
   if (role === "manager") return "/manager/dashboard";
   if (role === "admin") return "/admin/employees";
   return "/login";

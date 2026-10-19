@@ -49,13 +49,20 @@ const navByRole: Record<UserRole, NavItem[]> = {
     { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
     { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
+    { to: "/employee/overtime", label: "Làm thêm giờ", icon: <ClockRegular /> },
+  ],
+  hr: [
+    { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
+    { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
+    { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
+    { to: "/employee/overtime", label: "Làm thêm giờ", icon: <ClockRegular /> },
   ],
   manager: [
     { to: "/manager/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
     { to: "/manager/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
     { to: "/employee/attendance", label: "Điều chỉnh chấm công", icon: <ClockRegular /> },
     { to: "/manager/attendance", label: "Quản lý chấm công", icon: <ClockRegular /> },
-    { to: "/manager/leave", label: "Duyệt đơn xin nghỉ", icon: <DocumentBulletListRegular /> },
+    { to: "/manager/leave", label: "Duyệt đơn từ", icon: <DocumentBulletListRegular /> },
     { to: "/manager/organization", label: "Phòng ban & chức vụ", icon: <BuildingRegular /> },
   ],
   admin: [
@@ -91,6 +98,7 @@ function resolveIcon(name?: string): ReactNode {
 const roleLabels: Record<UserRole, string> = {
   employee: "Không gian nhân viên",
   manager: "Không gian quản lý",
+  hr: "Không gian nhân sự",
   admin: "Không gian quản trị",
 };
 

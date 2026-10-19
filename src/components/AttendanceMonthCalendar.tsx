@@ -9,6 +9,7 @@ import { attendanceViewApi } from "../services/hrApi";
 import { errorMessage } from "../services/http";
 import type { AttendanceCalendarDayDto, SessionStatus } from "../types/attendanceHr";
 import { formatTime } from "../utils/format";
+import { overtimeDurationLabel } from "../utils/overtime";
 
 const WEEKDAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 const MIN_YEAR = 2000;
@@ -222,10 +223,11 @@ export function AttendanceMonthCalendar({
   };
 
   const selectedIsWeekend = [0, 6].includes(selected.getDay());
+  const selectedIsHoliday = !selectedIsWeekend && !!dayData(selected)?.isHoliday;
   // Chỉ cho yêu cầu chỉnh sửa với ngày làm việc không ở tương lai (so theo ngày).
   // Nút chỉ hiện với tài khoản có quyền attendance.adjustment.self (như PermissionGate bên mobile).
   const canRequest =
-    !!onRequestAdjustment && !selectedIsWeekend && dayKey(selected) <= todayKey && can("attendance.adjustment.self");
+    !!onRequestAdjustment && !selectedIsWeekend && !selectedIsHoliday && dayKey(selected) <= todayKey && can("attendance.adjustment.self");
 
   // Nhảy tới một ngày bất kỳ (tương đương nút chọn ngày ở đầu màn Lịch bên mobile).
   const jumpToDate = (value: string) => {
@@ -281,7 +283,7 @@ export function AttendanceMonthCalendar({
           if (!day) return <div key={`blank-${index}`} />;
           const key = dayKey(day);
           const data = dayData(day);
-          const weekend = [0, 6].includes(day.getDay());
+          const weekend = [0, 6].includes(day.getDay()) || !!data?.isHoliday;
           const merged = data && data.morning === data.afternoon;
           return (
             <button
@@ -319,11 +321,14 @@ export function AttendanceMonthCalendar({
           </div>
         ) : loading && !selectedData ? (
           <Spinner size="tiny" label="Đang tải..." />
-        ) : selectedIsWeekend ? (
-          <div className="day-detail-row">
-            <i className="day-dot bar-leave" />
-            <div>NGÀY NGHỈ (cuối tuần)</div>
-          </div>
+        ) : selectedIsWeekend || selectedIsHoliday ? (
+          <>
+            <div className="day-detail-row">
+              <i className="day-dot bar-leave" />
+              <div>{selectedIsHoliday ? `NGÀY LỄ: ${selectedData?.holidayName ?? ""}` : "NGÀY NGHỈ (cuối tuần)"}</div>
+            </div>
+            {selectedData?.overtimeMinutes ? <div className="day-detail-times">Làm thêm giờ: <strong>{overtimeDurationLabel(selectedData.overtimeMinutes)}</strong> (đã duyệt)</div> : null}
+          </>
         ) : !selectedData ? (
           <div className="day-detail-row">
             <i className="day-dot" />
@@ -335,6 +340,7 @@ export function AttendanceMonthCalendar({
             <SessionLine label="Buổi chiều" status={selectedData.afternoon} source={selectedData.afternoonSource} day={selectedData} note={selectedData.afternoonNote} />
             {selectedData.checkInTime ? <div className="day-detail-times">Vào: <strong>{formatTime(selectedData.checkInTime)}</strong></div> : null}
             {selectedData.checkOutTime ? <div className="day-detail-times">Ra: <strong>{formatTime(selectedData.checkOutTime)}</strong></div> : null}
+            {selectedData.overtimeMinutes ? <div className="day-detail-times">Làm thêm giờ: <strong>{overtimeDurationLabel(selectedData.overtimeMinutes)}</strong> (đã duyệt)</div> : null}
           </>
         )}
         {canRequest ? (

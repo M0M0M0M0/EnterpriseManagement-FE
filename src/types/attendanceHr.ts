@@ -1,13 +1,17 @@
 // Kiểu dữ liệu cho chấm công theo buổi, ghi chú ngoại lệ, yêu cầu đi làm lại. Khớp hợp đồng API của backend.
 
 export type SessionStatus = "None" | "OnTime" | "Late" | "Absent" | "OnLeave";
-export type SessionSource = "None" | "Weekend" | "Leave" | "ReturnConfirmed" | "Note" | "Attendance" | "Missing";
+export type SessionSource = "None" | "Weekend" | "Holiday" | "Leave" | "ReturnConfirmed" | "Note" | "Attendance" | "Missing";
 export type DaySession = "Morning" | "Afternoon";
 
 // Trạng thái hiệu lực của một ngày, tách theo buổi (API lịch).
 export interface AttendanceCalendarDayDto {
   date: string;
   isWeekend: boolean;
+  // Ngày nghỉ lễ của công ty (có tên) và số phút làm thêm giờ đã được duyệt trong ngày.
+  isHoliday?: boolean;
+  holidayName?: string;
+  overtimeMinutes?: number;
   morning: SessionStatus;
   afternoon: SessionStatus;
   morningSource: SessionSource;

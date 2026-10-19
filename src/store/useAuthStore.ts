@@ -6,8 +6,10 @@ function primaryRole(roles: string[]): UserRole | null {
   const upper = roles.map((role) => role.toUpperCase());
   if (upper.includes("ADMIN")) return "admin";
   if (upper.includes("MANAGER")) return "manager";
+  if (upper.includes("HR")) return "hr";
   if (upper.includes("EMPLOYEE")) return "employee";
-  return null;
+  // Vai trò tự tạo khác: vẫn là nhân viên đi làm, menu thật do quyền của vai trò quyết định.
+  return upper.length > 0 ? "employee" : null;
 }
 
 interface AuthState {
