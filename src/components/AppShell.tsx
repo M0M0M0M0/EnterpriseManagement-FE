@@ -190,7 +190,8 @@ export function AppShell() {
 
   // Vùng nội dung tự cuộn (không phải cả trang) nên đổi trang thì đưa về đầu.
   useEffect(() => {
-    document.querySelector(".app-column")?.scrollTo({ top: 0 });
+    const column = document.querySelector(".app-column");
+    if (column) column.scrollTop = 0;
   }, [location.pathname]);
 
   if (!role || !session) return null;
