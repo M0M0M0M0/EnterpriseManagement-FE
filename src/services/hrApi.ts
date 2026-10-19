@@ -39,7 +39,7 @@ export const adjustmentProcessingApi = {
     http.put<AttendanceAdjustmentDto>(`/attendance/adjustments/${id}/reject-processing`, { rejectionReason }),
 };
 
-// Yêu cầu đi làm lại.
+// Yêu cầu rút ngắn nghỉ phép.
 export const leaveReturnApi = {
   // Nhân viên (leave.request.self)
   preview: (fromDate: string, fromSession: string) =>

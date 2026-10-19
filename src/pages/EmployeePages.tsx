@@ -52,6 +52,7 @@ import {
   leaveTypeApi,
 } from "../services/api";
 import { leaveReturnApi } from "../services/hrApi";
+import { LEAVE_CANCEL_EVENTS, leaveCancelApi, type LeaveCancelRequestDto } from "../services/leaveCancelApi";
 import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
 import type {
@@ -659,6 +660,11 @@ export function EmployeeLeavePage() {
   const [sending, setSending] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [returns, setReturns] = useState<LeaveReturnRequestDto[]>([]);
+  // Yêu cầu hủy đơn nghỉ đã duyệt (chưa bắt đầu) của tôi
+  const [cancels, setCancels] = useState<LeaveCancelRequestDto[]>([]);
+  const [cancelReqTarget, setCancelReqTarget] = useState<LeaveRequestDto | null>(null);
+  const [cancelReqReason, setCancelReqReason] = useState("");
+  const [cancelReqSending, setCancelReqSending] = useState(false);
   const [tab, setTab] = useState<LeaveTab>("requests");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
@@ -700,8 +706,10 @@ export function EmployeeLeavePage() {
       leaveTypeApi.getAll(),
       // Danh sách đi làm lại lỗi (vd. thiếu quyền) thì bỏ qua, không làm hỏng cả trang
       leaveReturnApi.getMine().catch(() => [] as LeaveReturnRequestDto[]),
+      leaveCancelApi.getMine().catch(() => [] as LeaveCancelRequestDto[]),
     ])
-      .then(([r, b, t, rt]) => {
+      .then(([r, b, t, rt, cx]) => {
+        setCancels(cx);
         // Đơn tạo sau (id lớn hơn) lên đầu.
         setRequests([...r].sort((a, c) => c.id - a.id));
         setBalances(b);
@@ -732,15 +740,17 @@ export function EmployeeLeavePage() {
             leaveRequestApi.getMine(),
             leaveBalanceApi.getByEmployee(employeeCode, new Date().getFullYear()),
             leaveReturnApi.getMine().catch(() => [] as LeaveReturnRequestDto[]),
+            leaveCancelApi.getMine().catch(() => [] as LeaveCancelRequestDto[]),
           ])
-            .then(([r, b, rt]) => {
+            .then(([r, b, rt, cx]) => {
+              setCancels(cx);
               setRequests([...r].sort((a, c) => c.id - a.id));
               setBalances(b);
               setReturns(rt);
             })
             .catch(() => undefined)
         : undefined,
-    { types: ["LeaveApproved", "LeaveRejected", "ReturnApproved", "ReturnRejected", "LeaveSubmitted"] },
+    { types: ["LeaveApproved", "LeaveRejected", "ReturnApproved", "ReturnRejected", "LeaveSubmitted", ...LEAVE_CANCEL_EVENTS] },
   );
 
   const selectedType = leaveTypes.find((t) => t.leaveTypeCode === form.leaveTypeCode);
@@ -805,6 +815,37 @@ export function EmployeeLeavePage() {
     }
   };
 
+  // Đơn đã duyệt nhưng chưa có buổi nào bắt đầu thì xin quản lý hủy (backend kiểm tra lại); đơn đang chờ duyệt thì hủy thẳng.
+  const pendingCancelOf = (leaveId: number) => cancels.find((c) => c.leaveRequestId === leaveId && c.status === "Pending");
+  const canRequestCancel = (item: LeaveRequestDto) =>
+    item.status === "Approved" && new Date(item.startDate).getTime() > Date.now() && !pendingCancelOf(item.id);
+
+  const sendCancelRequest = async () => {
+    if (!cancelReqTarget) return;
+    setCancelReqSending(true);
+    try {
+      await leaveCancelApi.submit(cancelReqTarget.id, cancelReqReason.trim());
+      notify({ ok: true, message: "Đã gửi yêu cầu hủy đơn, chờ quản lý duyệt." });
+      setCancelReqTarget(null);
+      setCancelReqReason("");
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err, "Không gửi được yêu cầu hủy.") });
+    } finally {
+      setCancelReqSending(false);
+    }
+  };
+
+  const withdrawCancelRequest = async (cancelId: number) => {
+    try {
+      await leaveCancelApi.withdraw(cancelId);
+      notify({ ok: true, message: "Đã rút lại yêu cầu hủy." });
+      load();
+    } catch (err) {
+      notify({ ok: false, message: errorMessage(err, "Không rút lại được.") });
+    }
+  };
+
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     setCancelling(true);
@@ -840,7 +881,7 @@ export function EmployeeLeavePage() {
           canSelf ? (
             <div style={{ display: "flex", gap: 8 }}>
               <Button icon={<ArrowClockwiseRegular />} onClick={() => setReturnOpen(true)}>
-                Đi làm lại
+                Rút ngắn phép
               </Button>
               <Button appearance="primary" icon={<AddRegular />} onClick={() => setOpen(true)}>
                 Tạo đơn
@@ -932,6 +973,32 @@ export function EmployeeLeavePage() {
                               Hủy đơn
                             </Button>
                           ) : null}
+                          {item.status === "Approved" && canSelf ? (
+                            pendingCancelOf(item.id) ? (
+                              <>
+                                <small>Đang chờ quản lý duyệt hủy</small>
+                                <Button
+                                  size="small"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void withdrawCancelRequest(pendingCancelOf(item.id)!.id);
+                                  }}
+                                >
+                                  Rút lại
+                                </Button>
+                              </>
+                            ) : canRequestCancel(item) ? (
+                              <Button
+                                size="small"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setCancelReqTarget(item);
+                                }}
+                              >
+                                Xin hủy đơn
+                              </Button>
+                            ) : null
+                          ) : null}
                         </div>
                       </article>
                     ))}
@@ -949,7 +1016,7 @@ export function EmployeeLeavePage() {
                   />
                 )}
               </SectionPanel>
-              <SectionPanel title="Yêu cầu đi làm lại của tôi">
+              <SectionPanel title="Yêu cầu rút ngắn nghỉ phép của tôi">
                 {returns.length ? (
                   <div className="request-list">
                     {returns.map((item) => (
@@ -987,7 +1054,7 @@ export function EmployeeLeavePage() {
                   </div>
                 ) : (
                   <EmptyState
-                    title="Chưa có yêu cầu đi làm lại"
+                    title="Chưa có yêu cầu rút ngắn nghỉ phép"
                     description="Khi cần quay lại làm việc trong thời gian đã được duyệt nghỉ, hãy gửi yêu cầu tại đây."
                   />
                 )}
@@ -1012,7 +1079,7 @@ export function EmployeeLeavePage() {
                           <small>Đã dùng {formatLeaveTime(balance.usedTime, balance.unit)}</small>
                           {balance.refundedTime && balance.refundedTime > 0 ? (
                             <small className="leave-refunded">
-                              Đã hoàn {formatLeaveTime(balance.refundedTime, balance.unit)} do đi làm lại
+                              Đã hoàn {formatLeaveTime(balance.refundedTime, balance.unit)} do rút ngắn phép
                             </small>
                           ) : null}
                         </div>
@@ -1062,6 +1129,29 @@ export function EmployeeLeavePage() {
         onConfirm={confirmCancel}
         onCancel={() => setCancelTarget(null)}
       />
+
+      <Dialog open={Boolean(cancelReqTarget)} onOpenChange={(_, data) => !data.open && setCancelReqTarget(null)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Xin hủy đơn nghỉ phép</DialogTitle>
+            <DialogContent className="form-stack">
+              <p className="field-hint">
+                {cancelReqTarget ? `${cancelReqTarget.leaveTypeName} (${leaveDateLabel(cancelReqTarget)}). ` : ""}
+                Quản lý duyệt thì đơn được hủy và phép được hoàn lại.
+              </p>
+              <Field label="Lý do hủy" required>
+                <Textarea resize="vertical" value={cancelReqReason} onChange={(_, data) => setCancelReqReason(data.value)} />
+              </Field>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setCancelReqTarget(null)}>Đóng</Button>
+              <Button appearance="primary" onClick={sendCancelRequest} disabled={cancelReqSending || !cancelReqReason.trim()}>
+                {cancelReqSending ? <Spinner size="tiny" /> : "Gửi yêu cầu"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       <Dialog open={Boolean(detail)} onOpenChange={(_, data) => !data.open && setDetail(null)}>
         <DialogSurface>
@@ -1308,13 +1398,13 @@ function ReturnLeaveDialog({
 
   const submit = async () => {
     if (!reason.trim()) {
-      notify({ ok: false, message: "Vui lòng nhập lý do đi làm lại." });
+      notify({ ok: false, message: "Vui lòng nhập lý do rút ngắn phép." });
       return;
     }
     setSending(true);
     try {
       await leaveReturnApi.submit({ fromDate, fromSession, reason });
-      notify({ ok: true, message: "Đã gửi yêu cầu đi làm lại." });
+      notify({ ok: true, message: "Đã gửi yêu cầu rút ngắn nghỉ phép." });
       setReason("");
       onSubmitted();
     } catch (err) {
@@ -1330,11 +1420,11 @@ function ReturnLeaveDialog({
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onClose()}>
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Đi làm lại</DialogTitle>
+          <DialogTitle>Rút ngắn nghỉ phép</DialogTitle>
           <DialogContent className="form-stack">
             <p className="field-hint">
-              Dùng khi bạn đã được duyệt nghỉ nhưng muốn đi làm lại. Chỉ chọn được buổi chưa bắt đầu; hệ thống tự đi
-              làm lại đến hết đợt nghỉ liên tục.
+              Dùng khi kỳ nghỉ đã bắt đầu nhưng bạn muốn đi làm sớm. Chỉ chọn được buổi chưa bắt đầu và không phải buổi đầu của kỳ nghỉ; hệ thống bỏ các buổi nghỉ còn
+              lại của đơn đó và hoàn phép. Chưa bắt đầu nghỉ mà không đi nữa thì dùng "Xin hủy đơn" ở danh sách đơn nghỉ.
             </p>
             <div className="form-grid">
               <Field label="Bắt đầu đi làm lại từ ngày" required>

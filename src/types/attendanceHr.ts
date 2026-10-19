@@ -1,4 +1,4 @@
-// Kiểu dữ liệu cho chấm công theo buổi, ghi chú ngoại lệ, yêu cầu đi làm lại. Khớp hợp đồng API của backend.
+// Kiểu dữ liệu cho chấm công theo buổi, ghi chú ngoại lệ, yêu cầu rút ngắn nghỉ phép. Khớp hợp đồng API của backend.
 
 export type SessionStatus = "None" | "OnTime" | "Late" | "Absent" | "OnLeave";
 export type SessionSource = "None" | "Weekend" | "Holiday" | "Leave" | "ReturnConfirmed" | "Note" | "Attendance" | "Missing";

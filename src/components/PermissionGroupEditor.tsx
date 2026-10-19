@@ -51,7 +51,7 @@ const FUNCTIONAL_GROUPS: FunctionalGroupDef[] = [
   {
     key: "hr",
     label: "Nhân sự (HR)",
-    hint: "Chấm công toàn công ty, ghi nhận ngoại lệ, xử lý điều chỉnh công và đi làm lại, bảng công tháng, ngày nghỉ lễ, cấp lại số ngày nghỉ.",
+    hint: "Chấm công toàn công ty, ghi nhận ngoại lệ, xử lý điều chỉnh công và rút ngắn phép, bảng công tháng, ngày nghỉ lễ, cấp lại số ngày nghỉ.",
     menus: ["page.hr.attendance", "page.hr.adjustments", "page.hr.leave-returns", "page.hr.attendance-notes", "page.hr.timesheet", "page.hr.holidays"],
     actions: [
       "attendance.view.all",

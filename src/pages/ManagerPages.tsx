@@ -41,6 +41,7 @@ import {
   positionApi,
 } from "../services/api";
 import { leaveReturnApi } from "../services/hrApi";
+import { LeaveCancelApprovalPanel } from "./LeaveCancelPages";
 import { OvertimeApprovalPanel } from "./OvertimePages";
 import { errorMessage } from "../services/http";
 import { useAuthStore } from "../store/useAuthStore";
@@ -76,6 +77,7 @@ function useManagerCode() {
 
 // Loại sự kiện làm tải lại im lặng (khớp NotificationTypes.manager của mobile).
 const MANAGER_EVENTS = [
+  "LeaveCancelSubmitted",
   "OvertimeSubmitted",
   "LeaveSubmitted",
   "ReturnSubmitted",
@@ -669,7 +671,7 @@ const leaveStatusFilters: { value: string; label: string }[] = [
   { value: "Cancelled", label: requestLabels.Cancelled },
 ];
 
-// Nhãn trạng thái từng buổi của yêu cầu đi làm lại (khớp returnSessionStateLabels của mobile).
+// Nhãn trạng thái từng buổi của yêu cầu rút ngắn nghỉ phép (khớp returnSessionStateLabels của mobile).
 const returnSessionLabels: Record<string, string> = {
   Pending: "Chờ quản lý duyệt",
   AwaitingHr: "Chờ xác nhận",
@@ -727,7 +729,7 @@ export function ManagerLeavePage() {
   const [approveDialog, setApproveDialog] = useState<LeaveRequestDto | null>(null);
   const [rejectDialog, setRejectDialog] = useState<LeaveRequestDto | null>(null);
   const [detail, setDetail] = useState<LeaveRequestDto | null>(null);
-  // Yêu cầu đi làm lại của người mình quản lý
+  // Yêu cầu rút ngắn nghỉ phép của người mình quản lý
   const [returns, setReturns] = useState<LeaveReturnRequestDto[]>([]);
   const [returnsError, setReturnsError] = useState("");
   const [approveReturn, setApproveReturn] = useState<LeaveReturnRequestDto | null>(null);
@@ -805,7 +807,7 @@ export function ManagerLeavePage() {
     setBusyId(approveReturn.id);
     try {
       await leaveReturnApi.approve(approveReturn.id);
-      notify({ ok: true, message: "Đã duyệt yêu cầu đi làm lại." });
+      notify({ ok: true, message: "Đã duyệt yêu cầu rút ngắn nghỉ phép." });
     } catch (err) {
       notify({ ok: false, message: errorMessage(err) });
     } finally {
@@ -844,7 +846,7 @@ export function ManagerLeavePage() {
   if (!canView) {
     return (
       <div className="page-stack">
-        <PageHeader title="Duyệt đơn từ" description="Xem và xử lý đơn nghỉ phép, đi làm lại và làm thêm giờ của nhân viên." />
+        <PageHeader title="Duyệt đơn từ" description="Xem và xử lý đơn nghỉ phép, rút ngắn phép, hủy phép và làm thêm giờ của nhân viên." />
         <EmptyState title="Không có quyền" description="Bạn không có quyền xem đơn nghỉ phép của nhân viên." />
       </div>
     );
@@ -868,17 +870,18 @@ export function ManagerLeavePage() {
     <div className="page-stack">
       <PageHeader
         title="Duyệt đơn từ"
-        description="Xem và xử lý đơn nghỉ phép, đi làm lại và làm thêm giờ của nhân viên."
+        description="Xem và xử lý đơn nghỉ phép, rút ngắn phép, hủy phép và làm thêm giờ của nhân viên."
         action={
           <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))}>
             <Tab value="pending">Chờ duyệt ({pending.length})</Tab>
             <Tab value="history">Lịch sử</Tab>
-            <Tab value="returns">Yêu cầu đi làm lại ({returns.length})</Tab>
+            <Tab value="returns">Yêu cầu rút ngắn nghỉ phép ({returns.length})</Tab>
+            <Tab value="cancels">Hủy phép</Tab>
             <Tab value="overtime">Làm thêm giờ</Tab>
           </TabList>
         }
       />
-      {tab !== "returns" && tab !== "overtime" ? (
+      {tab !== "returns" && tab !== "overtime" && tab !== "cancels" ? (
         <div className="filter-grid">
           <Field label="Tìm kiếm">
             <Input
@@ -897,7 +900,9 @@ export function ManagerLeavePage() {
           ) : null}
         </div>
       ) : null}
-      {tab === "overtime" ? (
+      {tab === "cancels" ? (
+        <LeaveCancelApprovalPanel />
+      ) : tab === "overtime" ? (
         canOvertimeView ? (
           <OvertimeApprovalPanel />
         ) : (
@@ -971,7 +976,7 @@ export function ManagerLeavePage() {
 )}
 </PagedItems>
         ) : (
-          <EmptyState title="Không có yêu cầu đi làm lại" description="Không có yêu cầu đi làm lại chờ duyệt." />
+          <EmptyState title="Không có yêu cầu rút ngắn nghỉ phép" description="Không có yêu cầu rút ngắn nghỉ phép chờ duyệt." />
         )
       ) : list.length ? (
         <PagedItems items={list} resetKey={list.length}>
@@ -1045,7 +1050,7 @@ export function ManagerLeavePage() {
 
       <ConfirmDialog
         open={!!approveReturn}
-        title="Duyệt yêu cầu đi làm lại"
+        title="Duyệt yêu cầu rút ngắn nghỉ phép"
         description={
           <>
             <p>Duyệt yêu cầu của {approveReturn?.employeeName}?</p>
@@ -1063,7 +1068,7 @@ export function ManagerLeavePage() {
 
       <ReasonDialog
         open={!!rejectReturn}
-        title="Từ chối yêu cầu đi làm lại"
+        title="Từ chối yêu cầu rút ngắn nghỉ phép"
         subtitle={rejectReturn ? `Yêu cầu của ${rejectReturn.employeeName}` : undefined}
         busy={busyId === rejectReturn?.id}
         onSubmit={doRejectReturn}

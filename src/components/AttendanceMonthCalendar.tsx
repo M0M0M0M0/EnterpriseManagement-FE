@@ -132,7 +132,7 @@ function SessionLine({ label, status, source, day, note }: {
         <strong>{label}:</strong> {statusLabels[status] ?? status}
         {status === "OnLeave" && day.leaveTypeName ? ` (${day.leaveTypeName})` : ""}
         {source === "Note" && note ? <small>Ghi chú của HR: {note}</small> : null}
-        {source === "ReturnConfirmed" ? <small>Đã được HR xác nhận (đi làm lại)</small> : null}
+        {source === "ReturnConfirmed" ? <small>Đã được HR xác nhận (rút ngắn phép)</small> : null}
       </div>
     </div>
   );

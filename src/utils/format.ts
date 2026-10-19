@@ -73,7 +73,7 @@ export const adjustmentStatusLabels: Record<string, string> = {
   Rejected: "Từ chối",
 };
 
-// Yêu cầu đi làm lại và từng buổi trong yêu cầu
+// Yêu cầu rút ngắn nghỉ phép và từng buổi trong yêu cầu
 export const returnStatusLabels: Record<string, string> = {
   PendingManager: "Chờ quản lý duyệt",
   PendingHr: "Chờ xác nhận",

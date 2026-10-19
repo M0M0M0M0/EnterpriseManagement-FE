@@ -58,7 +58,7 @@ const sessionStatusColors: Record<string, BadgeProps["color"]> = {
 
 const sourceLabels: Record<string, string> = {
   Note: "Ghi chú của nhân sự",
-  ReturnConfirmed: "Xác nhận đi làm lại",
+  ReturnConfirmed: "Xác nhận rút ngắn phép",
 };
 
 const noteStatusLabels: Record<string, string> = {
@@ -741,7 +741,7 @@ export function HrAdjustmentsPage() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Xử lý đi làm lại
+// 4. Xác nhận rút ngắn phép
 // ---------------------------------------------------------------------------
 
 const sessionKey = (date: string, session: DaySession) => `${date}|${session}`;
@@ -805,7 +805,7 @@ export function HrLeaveReturnsPage() {
     setDialogError("");
     try {
       await leaveReturnApi.process(target.id, { items: body });
-      notify({ ok: true, message: "Đã xác nhận đi làm lại." });
+      notify({ ok: true, message: "Đã xác nhận rút ngắn nghỉ phép." });
       closeDialog();
       load();
     } catch (err) {
@@ -834,7 +834,7 @@ export function HrLeaveReturnsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Xử lý đi làm lại"
+        title="Xác nhận rút ngắn phép"
         description="Xác nhận các buổi nhân viên đã đi làm lại trong thời gian nghỉ phép."
       />
       {loading && !items.length ? (
@@ -871,13 +871,13 @@ export function HrLeaveReturnsPage() {
 )}
 </PagedItems>
       ) : (
-        <EmptyState title="Không có yêu cầu" description="Không có yêu cầu đi làm lại nào chờ xác nhận." />
+        <EmptyState title="Không có yêu cầu" description="Không có yêu cầu rút ngắn nghỉ phép nào chờ xác nhận." />
       )}
 
       <Dialog open={!!target && !rejecting} onOpenChange={(_, data) => !data.open && closeDialog()}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Xử lý đi làm lại{target ? ` - ${target.employeeName} (${target.employeeCode})` : ""}</DialogTitle>
+            <DialogTitle>Xác nhận rút ngắn phép{target ? ` - ${target.employeeName} (${target.employeeCode})` : ""}</DialogTitle>
             <DialogContent className="form-stack">
               {target ? (
                 <>

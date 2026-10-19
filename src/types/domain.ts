@@ -224,7 +224,7 @@ export interface LeaveBalanceDto {
   allocatedTime: number;
   usedTime: number;
   remainingTime: number;
-  // Phần phép đã được hoàn do đi làm lại; usedTime và remainingTime ở trên đã tính phần hoàn này.
+  // Phần phép đã được hoàn do rút ngắn phép; usedTime và remainingTime ở trên đã tính phần hoàn này.
   refundedTime?: number;
 }
 
