@@ -677,7 +677,7 @@ export function EmployeeLeavePage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnTarget, setReturnTarget] = useState<LeaveRequestDto | null>(null);
   const [returns, setReturns] = useState<LeaveReturnRequestDto[]>([]);
   // Yêu cầu hủy đơn nghỉ đã duyệt (chưa bắt đầu) của tôi
   const [cancels, setCancels] = useState<LeaveCancelRequestDto[]>([]);
@@ -852,6 +852,24 @@ export function EmployeeLeavePage() {
   const canRequestCancel = (item: LeaveRequestDto) =>
     item.status === "Approved" && new Date(item.startDate).getTime() > Date.now() && !pendingCancelOf(item.id);
 
+  // Đơn nhiều ngày đã duyệt, đã bắt đầu nghỉ và còn ít nhất 1 ngày làm việc (từ ngày mai tới hết đơn): cho xin rút ngắn.
+  const canShorten = (item: LeaveRequestDto) => {
+    if (item.status !== "Approved") return false;
+    const day = (v: string) => {
+      const d = new Date(v);
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    };
+    const start = day(item.startDate);
+    const end = day(item.endDate);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (end.getTime() <= start.getTime() || start.getTime() > today.getTime()) return false;
+    for (const d = new Date(today.getTime() + 86400000); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+      if (d.getDay() !== 0 && d.getDay() !== 6) return true;
+    }
+    return false;
+  };
+
   const sendCancelRequest = async () => {
     if (!cancelReqTarget) return;
     setCancelReqSending(true);
@@ -902,14 +920,9 @@ export function EmployeeLeavePage() {
         description="Tạo đơn nghỉ, theo dõi trạng thái và số dư còn lại."
         action={
           canSelf ? (
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button icon={<ArrowClockwiseRegular />} onClick={() => setReturnOpen(true)}>
-                Rút ngắn phép
-              </Button>
-              <Button appearance="primary" icon={<AddRegular />} onClick={() => setOpen(true)}>
-                Tạo đơn
-              </Button>
-            </div>
+            <Button appearance="primary" icon={<AddRegular />} onClick={() => setOpen(true)}>
+              Tạo đơn
+            </Button>
           ) : undefined
         }
       />
@@ -999,6 +1012,16 @@ export function EmployeeLeavePage() {
                           {item.status === "Approved" && canSelf ? (
                             pendingCancelOf(item.id) ? (
                               <small>Bạn đã xin hủy đơn này, đang chờ quản lý duyệt</small>
+                            ) : canShorten(item) ? (
+                              <Button
+                                size="small"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setReturnTarget(item);
+                                }}
+                              >
+                                Xin rút ngắn
+                              </Button>
                             ) : canRequestCancel(item) ? (
                               <Button
                                 size="small"
@@ -1116,10 +1139,10 @@ export function EmployeeLeavePage() {
       )}
 
       <ReturnLeaveDialog
-        open={returnOpen}
-        onClose={() => setReturnOpen(false)}
+        leave={returnTarget}
+        onClose={() => setReturnTarget(null)}
         onSubmitted={() => {
-          setReturnOpen(false);
+          setReturnTarget(null);
           load();
         }}
       />
@@ -1368,14 +1391,15 @@ function earliestReturnSlot(): { date: string; session: DaySession } {
 }
 
 function ReturnLeaveDialog({
-  open,
+  leave,
   onClose,
   onSubmitted,
 }: {
-  open: boolean;
+  leave: LeaveRequestDto | null;
   onClose: () => void;
   onSubmitted: () => void;
 }) {
+  const open = Boolean(leave);
   const notify = useNotify();
   const { confirm, dialog: confirmDialog } = useConfirm();
   // Mặc định là buổi sớm nhất còn xin được (buổi đã bắt đầu thì backend không nhận), tránh báo lỗi ngay khi vừa mở.
@@ -1445,12 +1469,12 @@ function ReturnLeaveDialog({
           <DialogTitle>Rút ngắn nghỉ phép</DialogTitle>
           <DialogContent className="form-stack">
             <p className="field-hint">
-              Dùng khi kỳ nghỉ đã bắt đầu nhưng bạn muốn đi làm sớm. Chỉ chọn được buổi chưa bắt đầu và không phải buổi đầu của kỳ nghỉ; hệ thống bỏ các buổi nghỉ còn
+              Dùng khi kỳ nghỉ đã bắt đầu nhưng bạn muốn đi làm sớm. Chỉ rút ngắn được khi phần nghỉ còn lại từ 1 ngày trở lên; chỉ chọn được buổi chưa bắt đầu và không phải buổi đầu của kỳ nghỉ; hệ thống bỏ các buổi nghỉ còn
               lại của đơn đó và hoàn phép. Chưa bắt đầu nghỉ mà không đi nữa thì dùng "Xin hủy đơn" ở danh sách đơn nghỉ.
             </p>
             <div className="form-grid">
               <Field label="Bắt đầu đi làm lại từ ngày" required>
-                <Input type="date" min={isoDate()} value={fromDate} onChange={(_, data) => setFromDate(data.value)} />
+                <Input type="date" min={isoDate()} max={leave?.endDate?.slice(0, 10)} value={fromDate} onChange={(_, data) => setFromDate(data.value)} />
               </Field>
               <Field label="Buổi" required>
                 <Dropdown
