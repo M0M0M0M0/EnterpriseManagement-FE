@@ -902,7 +902,8 @@ export function EmployeeLeavePage() {
     }
   };
 
-  const remainingDays = balances.filter((b) => b.unit === "Days").reduce((sum, b) => sum + b.remainingTime, 0);
+  // Chỉ tính Nghỉ có phép (ANNUAL), không cộng Nghỉ chế độ.
+  const remainingDays = balances.filter((b) => b.leaveTypeCode === "ANNUAL").reduce((sum, b) => sum + b.remainingTime, 0);
   const pending = requests.filter((r) => r.status === "Pending").length;
 
   const filteredRequests = requests.filter(
