@@ -137,7 +137,8 @@ function AppRedirect() {
   const role = useAuthStore((state) => state.role);
   if (!role) return <Navigate to="/login" replace />;
   if (role === "employee" || role === "hr") return <Navigate to="/employee/dashboard" replace />;
-  if (role === "manager") return <Navigate to="/manager/dashboard" replace />;
+  // Quản lý vào "Tổng quan của tôi" trước vì họ chấm công mỗi sáng; tổng quan phòng ban cách một lần bấm.
+  if (role === "manager") return <Navigate to="/employee/dashboard" replace />;
   return <Navigate to="/admin/employees" replace />;
 }
 

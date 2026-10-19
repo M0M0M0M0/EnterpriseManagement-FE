@@ -2794,3 +2794,28 @@ p {
   min-width: 0;
   white-space: normal;
 }
+
+/* Dải trạng thái chấm công hôm nay trên trang tổng quan của quản lý */
+.my-today-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.my-today-strip > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.my-today-strip .ok {
+  color: #2e7d32;
+}
+
+.my-today-strip .warn {
+  color: #ef6c00;
+}

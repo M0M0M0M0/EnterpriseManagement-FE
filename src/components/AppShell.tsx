@@ -1,4 +1,4 @@
-import {
+﻿import {
   Button,
   Menu,
   MenuItem,
@@ -62,19 +62,20 @@ function groupRank(route: string) {
 
 const navByRole: Record<UserRole, NavItem[]> = {
   employee: [
-    { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
+    { to: "/employee/dashboard", label: "Tổng quan của tôi", icon: <HomeRegular />, end: true },
     { to: "/employee/attendance", label: "Chấm công của tôi", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
     { to: "/employee/overtime", label: "Làm thêm giờ", icon: <ClockRegular /> },
   ],
   hr: [
-    { to: "/employee/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
+    { to: "/employee/dashboard", label: "Tổng quan của tôi", icon: <HomeRegular />, end: true },
     { to: "/employee/attendance", label: "Chấm công của tôi", icon: <ClockRegular /> },
     { to: "/employee/leave", label: "Xin nghỉ phép", icon: <CalendarRegular /> },
     { to: "/employee/overtime", label: "Làm thêm giờ", icon: <ClockRegular /> },
   ],
   manager: [
-    { to: "/manager/dashboard", label: "Tổng quan", icon: <HomeRegular />, end: true },
+    { to: "/employee/dashboard", label: "Tổng quan của tôi", icon: <HomeRegular />, end: true },
+    { to: "/manager/dashboard", label: "Tổng quan phòng ban", icon: <HomeRegular /> },
     { to: "/manager/employees", label: "Quản lý nhân viên", icon: <PeopleTeamRegular /> },
     { to: "/employee/attendance", label: "Chấm công của tôi", icon: <ClockRegular /> },
     { to: "/manager/attendance", label: "Quản lý chấm công", icon: <ClockRegular /> },
@@ -301,3 +302,4 @@ export function AppShell() {
     </div>
   );
 }
+

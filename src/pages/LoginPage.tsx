@@ -14,7 +14,7 @@ import { useAuthStore } from "../store/useAuthStore";
 
 function homePathForRole(role: string | null) {
   if (role === "employee" || role === "hr") return "/employee/dashboard";
-  if (role === "manager") return "/manager/dashboard";
+  if (role === "manager") return "/employee/dashboard";
   if (role === "admin") return "/admin/employees";
   return "/login";
 }

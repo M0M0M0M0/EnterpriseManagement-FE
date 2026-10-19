@@ -30,7 +30,7 @@ import {
   SectionPanel,
 } from "../components/ui";
 import { FilterSelect, ReasonDialog, RetryError } from "../components/ReviewParts";
-import { PunchHero } from "../components/PunchHero";
+import { MyTodayStrip } from "../components/MyTodayStrip";
 import { useNotify } from "../components/useNotify";
 import {
   attendanceApi,
@@ -123,8 +123,8 @@ export function ManagerDashboardPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Tổng quan quản lý" description="Chấm công của bạn, tình hình team và các đơn đang chờ duyệt." />
-      {managerCode ? <PunchHero employeeCode={managerCode} /> : null}
+      <PageHeader title="Tổng quan phòng ban" description="Tình hình team và các đơn đang chờ duyệt. Chấm công của bạn ở mục Tổng quan của tôi." />
+      {managerCode ? <MyTodayStrip employeeCode={managerCode} /> : null}
       <MetricRail
         items={[
           { label: "Quy mô team", value: data.teamSize, tone: "brand" },
