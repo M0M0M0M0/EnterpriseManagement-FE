@@ -868,25 +868,6 @@ export function EmployeeLeavePage() {
     }
   };
 
-  const withdrawCancelRequest = async (cancelId: number) => {
-    if (
-      !(await confirm({
-        title: "Rút yêu cầu hủy?",
-        description: "Bạn sẽ không xin hủy đơn nghỉ này nữa. Đơn nghỉ vẫn giữ nguyên và có hiệu lực.",
-        confirmLabel: "Rút yêu cầu",
-      }))
-    ) {
-      return;
-    }
-    try {
-      await leaveCancelApi.withdraw(cancelId);
-      notify({ ok: true, message: "Đã rút yêu cầu hủy, đơn nghỉ vẫn có hiệu lực." });
-      load();
-    } catch (err) {
-      notify({ ok: false, message: errorMessage(err, "Không rút lại được.") });
-    }
-  };
-
   const confirmCancel = async () => {
     if (!cancelTarget) return;
     setCancelling(true);
@@ -1012,23 +993,12 @@ export function EmployeeLeavePage() {
                                 setCancelTarget(item);
                               }}
                             >
-                              Hủy đơn
+                              Rút lại
                             </Button>
                           ) : null}
                           {item.status === "Approved" && canSelf ? (
                             pendingCancelOf(item.id) ? (
-                              <>
-                                <small>Bạn đã xin hủy đơn này, đang chờ quản lý duyệt</small>
-                                <Button
-                                  size="small"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void withdrawCancelRequest(pendingCancelOf(item.id)!.id);
-                                  }}
-                                >
-                                  Rút yêu cầu hủy
-                                </Button>
-                              </>
+                              <small>Bạn đã xin hủy đơn này, đang chờ quản lý duyệt</small>
                             ) : canRequestCancel(item) ? (
                               <Button
                                 size="small"
@@ -1156,13 +1126,13 @@ export function EmployeeLeavePage() {
 
       <ConfirmDialog
         open={Boolean(cancelTarget)}
-        title="Hủy đơn nghỉ phép"
+        title="Rút lại đơn nghỉ phép"
         description={
           cancelTarget
-            ? `Bạn có chắc muốn hủy đơn ${cancelTarget.leaveTypeName} (${leaveDateLabel(cancelTarget)}) không?`
+            ? `Bạn có chắc muốn rút lại đơn ${cancelTarget.leaveTypeName} (${leaveDateLabel(cancelTarget)}) không?`
             : ""
         }
-        confirmLabel="Hủy đơn"
+        confirmLabel="Rút lại"
         confirming={cancelling}
         onConfirm={confirmCancel}
         onCancel={() => setCancelTarget(null)}
