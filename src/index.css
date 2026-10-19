@@ -2288,11 +2288,10 @@ p {
 .month-attendance-grid .weekday {
   padding: 6px 0;
   text-align: center;
-  color: var(--text-muted);
   font-size: 13px;
+  font-weight: 700;
 }
 
-.month-attendance-grid .weekday.is-sunday { color: #e07a77; font-weight: 700; }
 
 .day-cell {
   display: grid;
@@ -2512,7 +2511,7 @@ p {
 .leave-calendar { display: grid; gap: 10px; max-width: 460px; }
 .leave-calendar-head { display: flex; align-items: center; justify-content: space-between; }
 .leave-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.leave-calendar-grid .weekday { padding: 4px 0; text-align: center; color: var(--text-muted); font-size: 13px; }
+.leave-calendar-grid .weekday { padding: 4px 0; text-align: center; font-size: 13px; font-weight: 700; }
 .leave-day {
   display: grid;
   height: 44px;
